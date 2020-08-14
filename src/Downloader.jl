@@ -9,27 +9,22 @@ const CERTS_FILE = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
 include("helpers.jl")
 include("callbacks.jl")
 
-## libuv setup ##
+## setup & teardown ##
 
-const timer = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_timer)
+function __init__()
+    uv_timer_size = Base._sizeof_uv_timer
+    global timer = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), uv_timer_size)
+    uv_timer_init(timer)
 
-uv_timer_init(timer)
+    @check curl_global_init(CURL_GLOBAL_ALL)
+    global curl = curl_multi_init()
+    @check curl_multi_setopt(curl, CURLMOPT_TIMERFUNCTION, timer_cb)
+    @check curl_multi_setopt(curl, CURLMOPT_SOCKETFUNCTION, socket_cb)
 
-## curl setup ##
-
-@check curl_global_init(CURL_GLOBAL_ALL)
-
-const curl = curl_multi_init()
-
-# set various callbacks
-@check curl_multi_setopt(curl, CURLMOPT_TIMERFUNCTION, timer_cb)
-@check curl_multi_setopt(curl, CURLMOPT_SOCKETFUNCTION, socket_cb)
-
-## cleanup ##
-
-atexit() do
-    uv_close(timer, cglobal(:jl_free))
-    curl_multi_cleanup(curl)
+    atexit() do
+        uv_close(timer, cglobal(:jl_free))
+        curl_multi_cleanup(curl)
+    end
 end
 
 ## API ##
