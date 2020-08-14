@@ -29,6 +29,8 @@ end
 
 ## API ##
 
+const roots = IO[]
+
 function add_download(url::AbstractString, io::IO)
     # init a single curl handle
     handle = curl_easy_init()
@@ -44,7 +46,7 @@ function add_download(url::AbstractString, io::IO)
     @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true)
 
     # associate IO object with handle
-    # TODO: may need to root `io` to keep it alive
+    push!(roots, io)
     p = pointer_from_objref(io)
     @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, p)
     @check curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
