@@ -1,3 +1,5 @@
+puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)
+
 macro check(ex::Expr)
     ex.head == :call ||
         error("@check: not a call: $ex")
@@ -23,14 +25,9 @@ const UV_WRITABLE = 2
 
 uv_poll_alloc() = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_poll)
 
-# TODO: was uv_poll_init_socket in example, but our libuv doesn't have that
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
     @check ccall(:uv_poll_init, Cint,
         (Ptr{Cvoid}, Ptr{Cvoid}, curl_socket_t), Base.eventloop(), p, sock)
-    # NOTE: if assertion fails need to store indirectly
-    @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
-    unsafe_store!(convert(Ptr{curl_socket_t}, p), sock)
-    return nothing
 end
 
 function uv_poll_start(p::Ptr{Cvoid}, events::Integer, cb::Ptr{Cvoid})
