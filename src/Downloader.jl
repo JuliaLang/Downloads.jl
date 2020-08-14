@@ -4,8 +4,6 @@ export add_download, download
 
 using LibCURL
 
-const CERTS_FILE = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
-
 include("helpers.jl")
 include("callbacks.jl")
 
@@ -39,7 +37,8 @@ function add_download(url::AbstractString, io::IO)
     @check curl_easy_setopt(curl, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
 
     # HTTPS: tell curl where to find certs
-    @check curl_easy_setopt(handle, CURLOPT_CAINFO, CERTS_FILE)
+    certs_file = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
+    @check curl_easy_setopt(handle, CURLOPT_CAINFO, certs_file)
 
     # set the URL and request to follow redirects
     @check curl_easy_setopt(handle, CURLOPT_URL, url)
