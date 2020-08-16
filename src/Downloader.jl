@@ -49,13 +49,9 @@ function Curl()
     return curl
 end
 
-function __init__()
-    global curl = Curl()
-end
-
 ## API ##
 
-function add_download(url::AbstractString, io::IO)
+function add_download(curl::Curl, url::AbstractString, io::IO)
     # init a single curl handle
     easy = curl_easy_init()
 
@@ -88,7 +84,7 @@ end
 
 function download(url::AbstractString)
     io = IOBuffer()
-    add_download(url, io)
+    add_download(Curl(), url, io)
     sleep(1)
     return String(take!(io))
 end
