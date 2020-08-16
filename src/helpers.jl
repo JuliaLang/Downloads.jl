@@ -1,4 +1,10 @@
+# basic C stuff
+
 puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)
+
+jl_malloc(n::Integer) = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), n)
+
+# check if a function or C call failed
 
 macro check(ex::Expr)
     ex.head == :call ||
@@ -23,7 +29,10 @@ end
 const UV_READABLE = 1
 const UV_WRITABLE = 2
 
-uv_poll_alloc() = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), Base._sizeof_uv_poll)
+function uv_poll_alloc()
+    # allocate memory for: uv_poll_t struct + extra for curl_socket_t
+    jl_malloc(Base._sizeof_uv_poll + sizeof(curl_socket_t))
+end
 
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
     @check ccall(:uv_poll_init, Cint,

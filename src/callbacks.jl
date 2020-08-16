@@ -34,7 +34,11 @@ function event_callback(
     events    :: Cint,
 )::Cvoid
     ## TODO: use a member access API
-    sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
+    curl_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_poll_p))
+    curl = unsafe_pointer_to_objref(curl_p)::Curl
+    @assert curl == Downloader.curl
+    sock_p = uv_poll_p + Base._sizeof_uv_poll
+    sock = unsafe_load(convert(Ptr{curl_socket_t}, sock_p))
     flags = 0
     events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
@@ -83,10 +87,10 @@ function socket_callback(
         if uv_poll_p == C_NULL
             uv_poll_p = uv_poll_alloc()
             uv_poll_init(uv_poll_p, sock)
-            ## NOTE: if assertion fails need to store indirectly
-            @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
             ## TODO: use a member access API
-            unsafe_store!(convert(Ptr{curl_socket_t}, uv_poll_p), sock)
+            unsafe_store!(convert(Ptr{Ptr{Cvoid}}, uv_poll_p), curl_p)
+            sock_p = uv_poll_p + Base._sizeof_uv_poll
+            unsafe_store!(convert(Ptr{curl_socket_t}, sock_p), sock)
             @check curl_multi_assign(curl.multi, sock, uv_poll_p)
         end
         events = 0
