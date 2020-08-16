@@ -23,6 +23,13 @@ function Curl()
     @check curl_global_init(CURL_GLOBAL_ALL)
     multi = curl_multi_init()
 
+    # create object & set finalizer
+    curl = Curl(multi, timer, IO[])
+    finalizer(curl) do curl
+        uv_close(curl.timer, cglobal(:jl_free))
+        curl_multi_cleanup(curl.multi)
+    end
+
     # set timer callback
     timer_cb = @cfunction(timer_callback, Cint, (Ptr{Cvoid}, Clong, Ptr{Cvoid}))
     @check curl_multi_setopt(multi, CURLMOPT_TIMERFUNCTION, timer_cb)
@@ -32,10 +39,7 @@ function Curl()
         Cint, (Ptr{Cvoid}, curl_socket_t, Cint, Ptr{Cvoid}, Ptr{Cvoid}))
     @check curl_multi_setopt(multi, CURLMOPT_SOCKETFUNCTION, socket_cb)
 
-    finalizer(Curl(multi, timer, IO[])) do curl
-        uv_close(curl.timer, cglobal(:jl_free))
-        curl_multi_cleanup(curl.multi)
-    end
+    return curl
 end
 
 function __init__()
