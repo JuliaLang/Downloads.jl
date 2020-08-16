@@ -6,7 +6,8 @@ struct CURLMsg
    code :: CURLcode
 end
 
-function check_multi_info()
+function check_multi_info(curl::Curl)
+    @assert curl == Downloader.curl
     while true
         p = curl_multi_info_read(curl.multi, Ref{Cint}())
         p == C_NULL && return
@@ -36,12 +37,12 @@ function event_callback(
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
     sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
     @check curl_multi_socket_action(curl.multi, sock, flags)
-    check_multi_info()
+    check_multi_info(curl)
 end
 
 function timeout_callback(p::Ptr{Cvoid})::Cvoid
     @check curl_multi_socket_action(curl.multi, CURL_SOCKET_TIMEOUT, 0)
-    check_multi_info()
+    check_multi_info(curl)
 end
 
 # curl callbacks
