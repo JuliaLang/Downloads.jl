@@ -33,10 +33,11 @@ function event_callback(
     status    :: Cint,
     events    :: Cint,
 )::Cvoid
+    ## TODO: use a member access API
+    sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
     flags = 0
     events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
-    sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
     @check curl_multi_socket_action(curl.multi, sock, flags)
     check_multi_info(curl)
 end
@@ -82,8 +83,9 @@ function socket_callback(
         if uv_poll_p == C_NULL
             uv_poll_p = uv_poll_alloc()
             uv_poll_init(uv_poll_p, sock)
-            # NOTE: if assertion fails need to store indirectly
+            ## NOTE: if assertion fails need to store indirectly
             @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
+            ## TODO: use a member access API
             unsafe_store!(convert(Ptr{curl_socket_t}, uv_poll_p), sock)
             @check curl_multi_assign(curl.multi, sock, uv_poll_p)
         end
