@@ -31,6 +31,10 @@ function Curl()
     end
     curl_p = pointer_from_objref(curl)
 
+    # stash curl pointer in timer
+    ## TODO: use a member access API
+    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, timer), curl_p)
+
     # set timer callback
     timer_cb = @cfunction(timer_callback, Cint, (Ptr{Cvoid}, Clong, Ptr{Cvoid}))
     @check curl_multi_setopt(multi, CURLMOPT_TIMERFUNCTION, timer_cb)

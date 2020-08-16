@@ -40,7 +40,11 @@ function event_callback(
     check_multi_info(curl)
 end
 
-function timeout_callback(p::Ptr{Cvoid})::Cvoid
+function timeout_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
+    ## TODO: use a member access API
+    curl_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
+    curl = unsafe_pointer_to_objref(curl_p)::Curl
+    @assert curl == Downloader.curl
     @check curl_multi_socket_action(curl.multi, CURL_SOCKET_TIMEOUT, 0)
     check_multi_info(curl)
 end
