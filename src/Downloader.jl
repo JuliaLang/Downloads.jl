@@ -40,6 +40,7 @@ function Curl()
     socket_cb = @cfunction(socket_callback,
         Cint, (Ptr{Cvoid}, curl_socket_t, Cint, Ptr{Cvoid}, Ptr{Cvoid}))
     @check curl_multi_setopt(multi, CURLMOPT_SOCKETFUNCTION, socket_cb)
+    @check curl_multi_setopt(multi, CURLMOPT_SOCKETDATA, curl_p)
 
     return curl
 end

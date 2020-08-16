@@ -67,9 +67,11 @@ function socket_callback(
     easy      :: Ptr{Cvoid},
     sock      :: curl_socket_t,
     action    :: Cint,
-    userp     :: Ptr{Cvoid},
+    curl_p    :: Ptr{Cvoid},
     uv_poll_p :: Ptr{Cvoid},
 )::Cint
+    curl = unsafe_pointer_to_objref(curl_p)::Curl
+    @assert curl == Downloader.curl
     if action in (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT)
         if uv_poll_p == C_NULL
             uv_poll_p = uv_poll_alloc()
