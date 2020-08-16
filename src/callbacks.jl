@@ -8,7 +8,7 @@ end
 
 function check_multi_info()
     while true
-        p = curl_multi_info_read(curl, Ref{Cint}())
+        p = curl_multi_info_read(curl.multi, Ref{Cint}())
         p == C_NULL && return
         message = unsafe_load(convert(Ptr{CURLMsg}, p))
         if message.msg == CURLMSG_DONE
@@ -18,7 +18,7 @@ function check_multi_info()
             url = unsafe_string(url_ref[])
             msg = unsafe_string(curl_easy_strerror(message.code))
             @async @info("request done", url, msg, code = Int(message.code))
-            @check curl_multi_remove_handle(curl, handle)
+            @check curl_multi_remove_handle(curl.multi, handle)
             curl_easy_cleanup(handle)
         else
             @async @info("unknown CURL message type", msg = message.msg)
@@ -35,12 +35,12 @@ function event_callback(
     events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
     sock = unsafe_load(convert(Ptr{curl_socket_t}, uv_poll_p))
-    @check curl_multi_socket_action(curl, sock, flags)
+    @check curl_multi_socket_action(curl.multi, sock, flags)
     check_multi_info()
 end
 
 function timeout_callback(p::Ptr{Cvoid})::Cvoid
-    @check curl_multi_socket_action(curl, CURL_SOCKET_TIMEOUT, 0)
+    @check curl_multi_socket_action(curl.multi, CURL_SOCKET_TIMEOUT, 0)
     check_multi_info()
 end
 
@@ -75,7 +75,7 @@ function socket_callback(
             # NOTE: if assertion fails need to store indirectly
             @assert sizeof(curl_socket_t) <= sizeof(Ptr{Cvoid})
             unsafe_store!(convert(Ptr{curl_socket_t}, uv_poll_p), sock)
-            @check curl_multi_assign(curl, sock, uv_poll_p)
+            @check curl_multi_assign(curl.multi, sock, uv_poll_p)
         end
         events = 0
         action != CURL_POLL_IN  && (events |= UV_WRITABLE)
@@ -86,7 +86,7 @@ function socket_callback(
         if uv_poll_p != C_NULL
             uv_poll_stop(uv_poll_p)
             uv_close(uv_poll_p, cglobal(:jl_free))
-            @check curl_multi_assign(curl, sock, C_NULL)
+            @check curl_multi_assign(curl.multi, sock, C_NULL)
         end
     else
         @async @error("socket_callback: unexpected action", action)
@@ -101,9 +101,9 @@ function timer_callback(
 )::Cint
     if timeout_ms ≥ 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(timer, timeout_cb, max(1, timeout_ms), 0)
+        uv_timer_start(curl.timer, timeout_cb, max(1, timeout_ms), 0)
     else
-        uv_timer_stop(timer)
+        uv_timer_stop(curl.timer)
     end
     return 0
 end
