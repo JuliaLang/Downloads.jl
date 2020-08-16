@@ -20,6 +20,7 @@ function check_multi_info(curl::Curl)
             msg = unsafe_string(curl_easy_strerror(message.code))
             @async @info("request done", url, msg, code = Int(message.code))
             @check curl_multi_remove_handle(curl.multi, easy)
+            delete!(curl.roots, easy)
             curl_easy_cleanup(easy)
         else
             @async @info("unknown CURL message type", msg = message.msg)

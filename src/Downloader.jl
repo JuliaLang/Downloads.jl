@@ -7,7 +7,7 @@ using LibCURL
 mutable struct Curl
     multi::Ptr{Cvoid}
     timer::Ptr{Cvoid}
-    roots::Vector{IO}
+    roots::IdDict{Ptr{Cvoid},IO}
 end
 
 include("helpers.jl")
@@ -24,7 +24,7 @@ function Curl()
     multi = curl_multi_init()
 
     # create object & set finalizer
-    curl = Curl(multi, timer, IO[])
+    curl = Curl(multi, timer, IdDict{Ptr{Cvoid},IO}())
     finalizer(curl) do curl
         uv_close(curl.timer, cglobal(:jl_free))
         curl_multi_cleanup(curl.multi)
@@ -71,9 +71,9 @@ function add_download(url::AbstractString, io::IO)
     @check curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, true)
 
     # associate IO object with handle
-    push!(curl.roots, io) # TOOD: remove on completion
-    p = pointer_from_objref(io)
-    @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, p)
+    curl.roots[easy] = io
+    io_p = pointer_from_objref(io)
+    @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, io_p)
 
     # set write callback
     write_cb = @cfunction(write_callback,
