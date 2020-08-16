@@ -1,9 +1,9 @@
 # libuv callbacks
 
 struct CURLMsg
-   msg    :: CURLMSG
-   handle :: Ptr{Cvoid}
-   code   :: CURLcode
+   msg  :: CURLMSG
+   easy :: Ptr{Cvoid}
+   code :: CURLcode
 end
 
 function check_multi_info()
@@ -12,14 +12,14 @@ function check_multi_info()
         p == C_NULL && return
         message = unsafe_load(convert(Ptr{CURLMsg}, p))
         if message.msg == CURLMSG_DONE
-            handle = message.handle
+            easy = message.easy
             url_ref = Ref{Ptr{Cchar}}()
-            @check curl_easy_getinfo(handle, CURLINFO_EFFECTIVE_URL, url_ref)
+            @check curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, url_ref)
             url = unsafe_string(url_ref[])
             msg = unsafe_string(curl_easy_strerror(message.code))
             @async @info("request done", url, msg, code = Int(message.code))
-            @check curl_multi_remove_handle(curl.multi, handle)
-            curl_easy_cleanup(handle)
+            @check curl_multi_remove_handle(curl.multi, easy)
+            curl_easy_cleanup(easy)
         else
             @async @info("unknown CURL message type", msg = message.msg)
         end
@@ -47,22 +47,21 @@ end
 # curl callbacks
 
 function write_callback(
-    ptr   :: Ptr{Cchar},
+    data  :: Ptr{Cchar},
     size  :: Csize_t,
     count :: Csize_t,
     userp :: Ptr{Cvoid},
 )::Csize_t
     n = size * count
-    # ccall(:write, Csize_t, (Cint, Ptr{Cvoid}, Csize_t), 1, ptr, n)
     buffer = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, ptr, n)
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, data, n)
     io = unsafe_pointer_to_objref(userp)::IO
     @async write(io, buffer)
     return n
 end
 
 function socket_callback(
-    handle    :: Ptr{Cvoid},
+    easy      :: Ptr{Cvoid},
     sock      :: curl_socket_t,
     action    :: Cint,
     userp     :: Ptr{Cvoid},

@@ -46,33 +46,33 @@ end
 
 function add_download(url::AbstractString, io::IO)
     # init a single curl handle
-    handle = curl_easy_init()
+    easy = curl_easy_init()
 
     # HTTP options
-    @check curl_easy_setopt(handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
+    @check curl_easy_setopt(easy, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
 
     # HTTPS: tell curl where to find certs
     certs_file = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
-    @check curl_easy_setopt(handle, CURLOPT_CAINFO, certs_file)
+    @check curl_easy_setopt(easy, CURLOPT_CAINFO, certs_file)
 
     # set the URL and request to follow redirects
-    @check curl_easy_setopt(handle, CURLOPT_URL, url)
-    @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true)
+    @check curl_easy_setopt(easy, CURLOPT_URL, url)
+    @check curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, true)
 
     # associate IO object with handle
     push!(curl.roots, io) # TOOD: remove on completion
     p = pointer_from_objref(io)
-    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, p)
+    @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, p)
 
     # set write callback
     write_cb = @cfunction(write_callback,
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
-    @check curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
+    @check curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, write_cb)
 
     # add curl handle to be multiplexed
-    @check curl_multi_add_handle(curl.multi, handle)
+    @check curl_multi_add_handle(curl.multi, easy)
 
-    return handle
+    return easy
 end
 
 function download(url::AbstractString)
