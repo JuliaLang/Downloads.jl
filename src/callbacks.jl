@@ -46,18 +46,18 @@ end
 
 # curl callbacks
 
-function write_callback(
-    data  :: Ptr{Cchar},
-    size  :: Csize_t,
-    count :: Csize_t,
-    userp :: Ptr{Cvoid},
-)::Csize_t
-    n = size * count
-    buffer = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, data, n)
-    io = unsafe_pointer_to_objref(userp)::IO
-    @async write(io, buffer)
-    return n
+function timer_callback(
+    multi      :: Ptr{Cvoid},
+    timeout_ms :: Clong,
+    userp      :: Ptr{Cvoid},
+)::Cint
+    if timeout_ms ≥ 0
+        timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
+        uv_timer_start(curl.timer, timeout_cb, max(1, timeout_ms), 0)
+    else
+        uv_timer_stop(curl.timer)
+    end
+    return 0
 end
 
 function socket_callback(
@@ -93,16 +93,16 @@ function socket_callback(
     return 0
 end
 
-function timer_callback(
-    multi      :: Ptr{Cvoid},
-    timeout_ms :: Clong,
-    userp      :: Ptr{Cvoid},
-)::Cint
-    if timeout_ms ≥ 0
-        timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(curl.timer, timeout_cb, max(1, timeout_ms), 0)
-    else
-        uv_timer_stop(curl.timer)
-    end
-    return 0
+function write_callback(
+    data  :: Ptr{Cchar},
+    size  :: Csize_t,
+    count :: Csize_t,
+    userp :: Ptr{Cvoid},
+)::Csize_t
+    n = size * count
+    buffer = Array{UInt8}(undef, n)
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, data, n)
+    io = unsafe_pointer_to_objref(userp)::IO
+    @async write(io, buffer)
+    return n
 end
