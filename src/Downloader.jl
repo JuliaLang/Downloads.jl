@@ -42,7 +42,7 @@ function add_download(url::AbstractString, io::IO)
     handle = curl_easy_init()
 
     # HTTP options
-    @check curl_easy_setopt(curl, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
+    @check curl_easy_setopt(handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
 
     # HTTPS: tell curl where to find certs
     certs_file = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
