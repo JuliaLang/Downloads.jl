@@ -7,7 +7,6 @@ using LibCURL
 mutable struct Curl
     multi::Ptr{Cvoid}
     timer::Ptr{Cvoid}
-    roots::IdDict{Ptr{Cvoid},IO}
 end
 
 include("helpers.jl")
@@ -24,7 +23,7 @@ function Curl()
     multi = curl_multi_init()
 
     # create object & set finalizer
-    curl = Curl(multi, timer, IdDict{Ptr{Cvoid},IO}())
+    curl = Curl(multi, timer)
     finalizer(curl) do curl
         uv_close(curl.timer, cglobal(:jl_free))
         curl_multi_cleanup(curl.multi)
@@ -49,9 +48,7 @@ function Curl()
     return curl
 end
 
-## API ##
-
-function add_download(curl::Curl, url::AbstractString, io::IO)
+function add_download(curl::Curl, url::AbstractString, ch::Channel)
     # init a single curl handle
     easy = curl_easy_init()
 
@@ -66,10 +63,10 @@ function add_download(curl::Curl, url::AbstractString, io::IO)
     @check curl_easy_setopt(easy, CURLOPT_URL, url)
     @check curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, true)
 
-    # associate IO object with handle
-    curl.roots[easy] = io
-    io_p = pointer_from_objref(io)
-    @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, io_p)
+    # associate channel with handle
+    ch_p = pointer_from_objref(ch)
+    @check curl_easy_setopt(easy, CURLOPT_PRIVATE, ch_p)
+    @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, ch_p)
 
     # set write callback
     write_cb = @cfunction(write_callback,
@@ -82,11 +79,15 @@ function add_download(curl::Curl, url::AbstractString, io::IO)
     return easy
 end
 
-function download(url::AbstractString)
-    io = IOBuffer()
-    add_download(Curl(), url, io)
-    sleep(1)
-    return String(take!(io))
+## API ##
+
+function download(curl::Curl, url::AbstractString, io::IO)
+    ch = Channel{Vector{UInt8}}(Inf)
+    add_download(curl, url, ch)
+    for buf in ch
+        write(io, buf)
+    end
+    return io
 end
 
 end # module

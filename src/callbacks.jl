@@ -19,7 +19,10 @@ function check_multi_info(curl::Curl)
             msg = unsafe_string(curl_easy_strerror(message.code))
             @async @info("request done", url, msg, code = Int(message.code))
             @check curl_multi_remove_handle(curl.multi, easy)
-            delete!(curl.roots, easy)
+            ch_p_ref = Ref{Ptr{Cvoid}}()
+            @check curl_easy_getinfo(easy, CURLINFO_PRIVATE, ch_p_ref)
+            ch = unsafe_pointer_to_objref(ch_p_ref[])::Channel{Vector{UInt8}}
+            close(ch)
             curl_easy_cleanup(easy)
         else
             @async @info("unknown CURL message type", msg = message.msg)
@@ -109,12 +112,12 @@ function write_callback(
     data  :: Ptr{Cchar},
     size  :: Csize_t,
     count :: Csize_t,
-    userp :: Ptr{Cvoid},
+    ch_p  :: Ptr{Cvoid},
 )::Csize_t
     n = size * count
-    buffer = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buffer, data, n)
-    io = unsafe_pointer_to_objref(userp)::IO
-    @async write(io, buffer)
+    buf = Array{UInt8}(undef, n)
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
+    ch = unsafe_pointer_to_objref(ch_p)::Channel{Vector{UInt8}}
+    put!(ch, buf)
     return n
 end
