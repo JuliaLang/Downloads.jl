@@ -49,8 +49,11 @@ end
 function timer_callback(
     multi      :: Ptr{Cvoid},
     timeout_ms :: Clong,
-    userp      :: Ptr{Cvoid},
+    curl_p     :: Ptr{Cvoid},
 )::Cint
+    curl = unsafe_pointer_to_objref(curl_p)::Curl
+    @assert curl == Downloader.curl
+    @assert multi == curl.multi
     if timeout_ms ≥ 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
         uv_timer_start(curl.timer, timeout_cb, max(1, timeout_ms), 0)

@@ -29,10 +29,12 @@ function Curl()
         uv_close(curl.timer, cglobal(:jl_free))
         curl_multi_cleanup(curl.multi)
     end
+    curl_p = pointer_from_objref(curl)
 
     # set timer callback
     timer_cb = @cfunction(timer_callback, Cint, (Ptr{Cvoid}, Clong, Ptr{Cvoid}))
     @check curl_multi_setopt(multi, CURLMOPT_TIMERFUNCTION, timer_cb)
+    @check curl_multi_setopt(multi, CURLMOPT_TIMERDATA, curl_p)
 
     # set socket callback
     socket_cb = @cfunction(socket_callback,
