@@ -4,6 +4,9 @@ export add_download, download
 
 using LibCURL
 
+const CURL_VERSION = unsafe_string(curl_version())
+const USER_AGENT = "$CURL_VERSION julia/$VERSION"
+
 mutable struct Curl
     multi::Ptr{Cvoid}
     timer::Ptr{Cvoid}
@@ -53,9 +56,12 @@ function add_download(curl::Curl, url::AbstractString, ch::Channel)
     easy = curl_easy_init()
 
     # curl options
+    curl_easy_setopt(easy, CURLOPT_TCP_FASTOPEN, true) # failure ok, unsupported
     @check curl_easy_setopt(easy, CURLOPT_NOSIGNAL, true)
     @check curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, true)
+    @check curl_easy_setopt(easy, CURLOPT_MAXREDIRS, 10)
     @check curl_easy_setopt(easy, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
+    @check curl_easy_setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
 
     # tell curl where to find HTTPS certs
     certs_file = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
