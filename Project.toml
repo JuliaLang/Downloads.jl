@@ -7,6 +7,7 @@ version = "0.1.0"
 LibCURL = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
 
 [compat]
+LibCURL = "0.6"
 julia = "1.5"
 
 [extras]
