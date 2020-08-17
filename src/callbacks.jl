@@ -12,17 +12,12 @@ function check_multi_info(multi::CurlMulti)
         p == C_NULL && return
         message = unsafe_load(convert(Ptr{CURLMsg}, p))
         if message.msg == CURLMSG_DONE
-            easy = message.easy
-            url_ref = Ref{Ptr{Cchar}}()
-            @check curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, url_ref)
-            url = unsafe_string(url_ref[])
-            msg = unsafe_string(curl_easy_strerror(message.code))
-            # @async @info("request done", url, msg, code = Int(message.code))
-            @check curl_multi_remove_handle(multi.handle, easy)
-            ch_p_ref = Ref{Ptr{Cvoid}}()
-            @check curl_easy_getinfo(easy, CURLINFO_PRIVATE, ch_p_ref)
-            ch = unsafe_pointer_to_objref(ch_p_ref[])::Channel{Vector{UInt8}}
-            close(ch)
+            easy_handle = message.easy
+            easy_p_ref = Ref{Ptr{Cvoid}}()
+            @check curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, easy_p_ref)
+            easy = unsafe_pointer_to_objref(easy_p_ref[])::CurlEasy
+            @assert easy_handle == easy.handle
+            close(easy.channel)
         else
             @async @info("unknown CURL message type", msg = message.msg)
         end
@@ -62,7 +57,7 @@ function timer_callback(
     multi_p    :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::CurlMulti
-    handle_p == multi.handle || @async @error("curl multi handle mismatch")
+    @assert handle_p == multi.handle
     if timeout_ms ≥ 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
         uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)

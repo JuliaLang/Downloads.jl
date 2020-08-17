@@ -79,13 +79,6 @@ function CurlEasy(url::AbstractString, headers = Union{}[])
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
     @check curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
 
-    # associate channel with handle
-    channel = Channel{Vector{UInt8}}(Inf)
-    # TODO: associate the easy object instead
-    channel_p = pointer_from_objref(channel)
-    @check curl_easy_setopt(handle, CURLOPT_PRIVATE, channel_p)
-    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, channel_p)
-
     # set headers for the handle
     headers_p = to_curl_slist(headers)
     @check curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers_p)
@@ -93,15 +86,23 @@ function CurlEasy(url::AbstractString, headers = Union{}[])
     # set the URL to download
     @check curl_easy_setopt(handle, CURLOPT_URL, url)
 
-    # create object, set finalizer & return
-    finalizer(CurlEasy(handle, headers_p, channel)) do easy
+    # create object & set finalizer
+    channel = Channel{Vector{UInt8}}(Inf)
+    easy = CurlEasy(handle, headers_p, channel)
+    finalizer(easy) do easy
         curl_easy_cleanup(easy.handle)
-        curl_slist_free_all(easy.headers_p)
+        curl_slist_free_all(easy.headers)
     end
-end
+    easy_p = pointer_from_objref(easy)
 
-function add_download(multi::CurlMulti, easy::CurlEasy)
-    @check curl_multi_add_handle(multi.handle, easy.handle)
+    # associate the easy object with the curl handle
+    @check curl_easy_setopt(handle, CURLOPT_PRIVATE, easy_p)
+
+    # set the channel as the write callback user data
+    channel_p = pointer_from_objref(channel)
+    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, channel_p)
+
+    return easy
 end
 
 ## API ##
@@ -113,10 +114,11 @@ function download(
     headers = Union{}[],
 )
     easy = CurlEasy(url, headers)
-    add_download(multi, easy)
+    @check curl_multi_add_handle(multi.handle, easy.handle)
     for buf in easy.channel
         write(io, buf)
     end
+    @check curl_multi_remove_handle(multi.handle, easy.handle)
     return io
 end
 
