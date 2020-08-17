@@ -51,7 +51,7 @@ function Curl()
     return curl
 end
 
-function add_download(curl::Curl, url::AbstractString, ch::Channel)
+function curl_easy_handle(curl::Curl, ch::Channel)
     # init a single curl handle
     easy = curl_easy_init()
 
@@ -72,28 +72,32 @@ function add_download(curl::Curl, url::AbstractString, ch::Channel)
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
     @check curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, write_cb)
 
-    # set the URL
-    @check curl_easy_setopt(easy, CURLOPT_URL, url)
-
     # associate channel with handle
     ch_p = pointer_from_objref(ch)
     @check curl_easy_setopt(easy, CURLOPT_PRIVATE, ch_p)
     @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, ch_p)
-
-    # add curl handle to be multiplexed
-    @check curl_multi_add_handle(curl.multi, easy)
 
     return easy
 end
 
 ## API ##
 
-function download(curl::Curl, url::AbstractString, io::IO)
+function download(
+    curl::Curl,
+    url::AbstractString,
+    io::IO;
+    headers = Union{}[],
+)
     ch = Channel{Vector{UInt8}}(Inf)
-    add_download(curl, url, ch)
+    easy = curl_easy_handle(curl, ch)
+    headers_p = to_curl_slist(headers)
+    @check curl_easy_setopt(easy, CURLOPT_HTTPHEADER, headers_p)
+    @check curl_easy_setopt(easy, CURLOPT_URL, url)
+    @check curl_multi_add_handle(curl.multi, easy)
     for buf in ch
         write(io, buf)
     end
+    curl_slist_free_all(headers_p)
     return io
 end
 

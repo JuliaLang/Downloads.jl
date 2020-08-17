@@ -83,7 +83,13 @@ function to_curl_slist(strs)
     list_p = C_NULL
     for str in strs
         if str isa Pair
-            str = "$(str[1]): $(str[2])"
+            key, val = str
+            if val == nothing
+                str = "$key:"
+            else
+                val = string(val)::String
+                str = isempty(val) ? "$key;" : "$key: $val"
+            end
         elseif !(str isa Union{String, SubString{String}})
             str = string(str)::String
         end
