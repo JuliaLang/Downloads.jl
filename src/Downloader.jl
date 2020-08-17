@@ -7,12 +7,19 @@ using LibCURL
 const CURL_VERSION = unsafe_string(curl_version())
 const USER_AGENT = "$CURL_VERSION julia/$VERSION"
 
+include("helpers.jl")
+
+mutable struct CurlEasy
+    handle::Ptr{Cvoid}
+    headers::Ptr{curl_slist_t}
+    channel::Channel{Vector{UInt8}}
+end
+
 mutable struct CurlMulti
     handle::Ptr{Cvoid}
     timer::Ptr{Cvoid}
 end
 
-include("helpers.jl")
 include("callbacks.jl")
 
 ## setup & teardown ##
@@ -51,33 +58,50 @@ function CurlMulti()
     return multi
 end
 
-function curl_easy_handle(ch::Channel)
+function CurlEasy(url::AbstractString, headers = Union{}[])
     # init a single curl handle
-    easy = curl_easy_init()
+    handle = curl_easy_init()
 
     # curl options
-    curl_easy_setopt(easy, CURLOPT_TCP_FASTOPEN, true) # failure ok, unsupported
-    @check curl_easy_setopt(easy, CURLOPT_NOSIGNAL, true)
-    @check curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, true)
-    @check curl_easy_setopt(easy, CURLOPT_MAXREDIRS, 10)
-    @check curl_easy_setopt(easy, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
-    @check curl_easy_setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
+    curl_easy_setopt(handle, CURLOPT_TCP_FASTOPEN, true) # failure ok, unsupported
+    @check curl_easy_setopt(handle, CURLOPT_NOSIGNAL, true)
+    @check curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, true)
+    @check curl_easy_setopt(handle, CURLOPT_MAXREDIRS, 10)
+    @check curl_easy_setopt(handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
+    @check curl_easy_setopt(handle, CURLOPT_USERAGENT, USER_AGENT)
 
     # tell curl where to find HTTPS certs
     certs_file = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
-    @check curl_easy_setopt(easy, CURLOPT_CAINFO, certs_file)
+    @check curl_easy_setopt(handle, CURLOPT_CAINFO, certs_file)
 
     # set write callback
     write_cb = @cfunction(write_callback,
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
-    @check curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, write_cb)
+    @check curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, write_cb)
 
     # associate channel with handle
-    ch_p = pointer_from_objref(ch)
-    @check curl_easy_setopt(easy, CURLOPT_PRIVATE, ch_p)
-    @check curl_easy_setopt(easy, CURLOPT_WRITEDATA, ch_p)
+    channel = Channel{Vector{UInt8}}(Inf)
+    # TODO: associate the easy object instead
+    channel_p = pointer_from_objref(channel)
+    @check curl_easy_setopt(handle, CURLOPT_PRIVATE, channel_p)
+    @check curl_easy_setopt(handle, CURLOPT_WRITEDATA, channel_p)
 
-    return easy
+    # set headers for the handle
+    headers_p = to_curl_slist(headers)
+    @check curl_easy_setopt(handle, CURLOPT_HTTPHEADER, headers_p)
+
+    # set the URL to download
+    @check curl_easy_setopt(handle, CURLOPT_URL, url)
+
+    # create object, set finalizer & return
+    finalizer(CurlEasy(handle, headers_p, channel)) do easy
+        curl_easy_cleanup(easy.handle)
+        curl_slist_free_all(easy.headers_p)
+    end
+end
+
+function add_download(multi::CurlMulti, easy::CurlEasy)
+    @check curl_multi_add_handle(multi.handle, easy.handle)
 end
 
 ## API ##
@@ -88,16 +112,11 @@ function download(
     io::IO;
     headers = Union{}[],
 )
-    ch = Channel{Vector{UInt8}}(Inf)
-    easy = curl_easy_handle(ch)
-    headers_p = to_curl_slist(headers)
-    @check curl_easy_setopt(easy, CURLOPT_HTTPHEADER, headers_p)
-    @check curl_easy_setopt(easy, CURLOPT_URL, url)
-    @check curl_multi_add_handle(multi.handle, easy)
-    for buf in ch
+    easy = CurlEasy(url, headers)
+    add_download(multi, easy)
+    for buf in easy.channel
         write(io, buf)
     end
-    curl_slist_free_all(headers_p)
     return io
 end
 
