@@ -4,7 +4,7 @@ export Multi, Easy, add_handle, remove_handle, set_url, set_headers
 
 using LibCURL
 
-include("helpers.jl")
+include("utils.jl")
 
 function __init__()
     @check curl_global_init(CURL_GLOBAL_ALL)
