@@ -72,38 +72,9 @@ function curl_multi_socket_action(multi_handle, s, ev_bitmask)
     curl_multi_socket_action(multi_handle, s, ev_bitmask, Ref{Cint}())
 end
 
-# converting to & from curl string lists
+# curl string list structure
 
 struct curl_slist_t
     data::Ptr{Cchar}
     next::Ptr{curl_slist_t}
-end
-
-function to_curl_slist(strs)
-    list_p = C_NULL
-    for str in strs
-        if str isa Pair
-            key, val = str
-            if val == nothing
-                str = "$key:"
-            else
-                val = string(val)::String
-                str = isempty(val) ? "$key;" : "$key: $val"
-            end
-        elseif !(str isa Union{String, SubString{String}})
-            str = string(str)::String
-        end
-        list_p = curl_slist_append(list_p, str)
-    end
-    return convert(Ptr{curl_slist_t}, list_p)
-end
-
-function from_curl_slist(list_p::Ptr)
-    strs = String[]
-    while list_p != C_NULL
-        list = unsafe_load(convert(Ptr{curl_slist_t}, list_p))
-        push!(strs, unsafe_string(list.data))
-        list_p = list.next
-    end
-    return strs
 end

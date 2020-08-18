@@ -13,7 +13,9 @@ function download(
 )
     easy = Easy()
     set_url(easy, url)
-    set_headers(easy, headers)
+    for hdr in headers
+        add_header(easy, hdr)
+    end
     add_handle(multi, easy)
     for buf in easy.channel
         write(io, buf)
