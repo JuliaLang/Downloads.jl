@@ -35,10 +35,17 @@ function set_url(easy::Easy, url::AbstractString)
     @check curl_easy_setopt(easy.handle, CURLOPT_URL, url)
 end
 
-function set_headers(easy::Easy, headers)
-    easy.headers = to_curl_slist(headers)
+function add_header(easy::Easy, hdr::Union{String, SubString{String}})
+    easy.headers = curl_slist_append(easy.headers, hdr)
     @check curl_easy_setopt(easy.handle, CURLOPT_HTTPHEADER, easy.headers)
 end
+
+add_header(easy::Easy, hdr::AbstractString) = add_header(easy, string(hdr)::String)
+add_header(easy::Easy, key::AbstractString, val::AbstractString) =
+    add_header(easy, isempty(val) ? "$key;" : "$key: $val")
+add_header(easy::Easy, key::AbstractString, val::Nothing) =
+    add_header(easy, "$key:")
+add_header(easy::Easy, pair::Pair) = add_header(easy, pair...)
 
 function write_callback(
     data  :: Ptr{Cchar},
