@@ -1,7 +1,7 @@
 mutable struct Easy
-    handle::Ptr{Cvoid}
-    channel::Channel{Vector{UInt8}}
-    headers::Ptr{curl_slist_t}
+    handle  :: Ptr{Cvoid}
+    channel :: Channel{Vector{UInt8}}
+    headers :: Ptr{curl_slist_t}
 end
 
 function Easy()
@@ -16,6 +16,8 @@ function Easy()
     set_defaults(easy)
     return easy
 end
+
+# request options
 
 function set_defaults(easy::Easy)
     # curl options
@@ -46,6 +48,8 @@ add_header(easy::Easy, key::AbstractString, val::AbstractString) =
 add_header(easy::Easy, key::AbstractString, val::Nothing) =
     add_header(easy, "$key:")
 add_header(easy::Easy, pair::Pair) = add_header(easy, pair...)
+
+# callbacks
 
 function write_callback(
     data  :: Ptr{Cchar},
