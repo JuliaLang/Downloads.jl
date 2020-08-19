@@ -4,6 +4,9 @@ export
     Easy,
         set_url,
         add_header,
+        get_effective_url,
+        get_response_code,
+        get_response_headers,
     Multi,
         add_handle,
         remove_handle

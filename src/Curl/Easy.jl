@@ -1,14 +1,20 @@
 mutable struct Easy
-    handle  :: Ptr{Cvoid}
-    channel :: Channel{Vector{UInt8}}
-    headers :: Ptr{curl_slist_t}
+    handle   :: Ptr{Cvoid}
+    channel  :: Channel{Vector{UInt8}}
+    req_hdrs :: Ptr{curl_slist_t}
+    res_hdrs :: Vector{String}
 end
 
 function Easy()
-    easy = Easy(curl_easy_init(), Channel{Vector{UInt8}}(Inf), C_NULL)
+    easy = Easy(
+        curl_easy_init(),
+        Channel{Vector{UInt8}}(Inf),
+        C_NULL,
+        String[],
+    )
     finalizer(easy) do easy
         curl_easy_cleanup(easy.handle)
-        curl_slist_free_all(easy.headers)
+        curl_slist_free_all(easy.req_hdrs)
     end
     add_callbacks(easy)
     set_defaults(easy)
@@ -37,8 +43,8 @@ function set_url(easy::Easy, url::AbstractString)
 end
 
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
-    easy.headers = curl_slist_append(easy.headers, hdr)
-    @check curl_easy_setopt(easy.handle, CURLOPT_HTTPHEADER, easy.headers)
+    easy.req_hdrs = curl_slist_append(easy.req_hdrs, hdr)
+    @check curl_easy_setopt(easy.handle, CURLOPT_HTTPHEADER, easy.req_hdrs)
 end
 
 add_header(easy::Easy, hdr::AbstractString) = add_header(easy, string(hdr)::String)
@@ -48,7 +54,54 @@ add_header(easy::Easy, key::AbstractString, val::Nothing) =
     add_header(easy, "$key:")
 add_header(easy::Easy, pair::Pair) = add_header(easy, pair...)
 
+# response info
+
+function get_effective_url(easy::Easy)
+    url_ref = Ref{Ptr{Cchar}}()
+    @check curl_easy_getinfo(easy.handle, CURLINFO_EFFECTIVE_URL, url_ref)
+    return unsafe_string(url_ref[])
+end
+
+function get_response_code(easy::Easy)
+    code_ref = Ref{Clong}()
+    @check curl_easy_getinfo(easy.handle, CURLINFO_RESPONSE_CODE, code_ref)
+    return Int(code_ref[])
+end
+
+function get_response_headers(easy::Easy)
+    headers = Pair{String,String}[]
+    response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
+    for hdr in easy.res_hdrs
+        if occursin(r"^\s*$", hdr)
+            # ignore
+        elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr)) !== nothing
+            response = m.captures[1]
+            empty!(headers)
+        elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr)) !== nothing
+            push!(headers, lowercase(m.captures[1]) => m.captures[2])
+        else
+            url = get_effective_url(easy)
+            status = get_response_code(easy)
+            @warn "malformed HTTP header" url status header=hdr
+        end
+    end
+    return response, headers
+end
+
 # callbacks
+
+function header_callback(
+    data   :: Ptr{Cchar},
+    size   :: Csize_t,
+    count  :: Csize_t,
+    easy_p :: Ptr{Cvoid},
+)::Csize_t
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    n = size * count
+    hdr = unsafe_string(data, n)
+    push!(easy.res_hdrs, hdr)
+    return n
+end
 
 function write_callback(
     data   :: Ptr{Cchar},
@@ -68,6 +121,12 @@ function add_callbacks(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_PRIVATE, easy_p)
+
+    # set header callback
+    header_cb = @cfunction(header_callback,
+        Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
+    @check curl_easy_setopt(easy.handle, CURLOPT_HEADERFUNCTION, header_cb)
+    @check curl_easy_setopt(easy.handle, CURLOPT_HEADERDATA, easy_p)
 
     # set write callback
     write_cb = @cfunction(write_callback,
