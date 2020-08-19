@@ -10,8 +10,6 @@ function Easy()
         curl_easy_cleanup(easy.handle)
         curl_slist_free_all(easy.headers)
     end
-    easy_p = pointer_from_objref(easy)
-    @check curl_easy_setopt(easy.handle, CURLOPT_PRIVATE, easy_p)
     add_callbacks(easy)
     set_defaults(easy)
     return easy
@@ -53,26 +51,27 @@ add_header(easy::Easy, pair::Pair) = add_header(easy, pair...)
 # callbacks
 
 function write_callback(
-    data  :: Ptr{Cchar},
-    size  :: Csize_t,
-    count :: Csize_t,
-    ch_p  :: Ptr{Cvoid},
+    data   :: Ptr{Cchar},
+    size   :: Csize_t,
+    count  :: Csize_t,
+    easy_p :: Ptr{Cvoid},
 )::Csize_t
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
     n = size * count
     buf = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    ch = unsafe_pointer_to_objref(ch_p)::Channel{Vector{UInt8}}
-    put!(ch, buf)
+    put!(easy.channel, buf)
     return n
 end
 
 function add_callbacks(easy::Easy)
+    # pointer to easy object
+    easy_p = pointer_from_objref(easy)
+    @check curl_easy_setopt(easy.handle, CURLOPT_PRIVATE, easy_p)
+
     # set write callback
     write_cb = @cfunction(write_callback,
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
     @check curl_easy_setopt(easy.handle, CURLOPT_WRITEFUNCTION, write_cb)
-
-    # set the channel as the write callback user data
-    channel_p = pointer_from_objref(easy.channel)
-    @check curl_easy_setopt(easy.handle, CURLOPT_WRITEDATA, channel_p)
+    @check curl_easy_setopt(easy.handle, CURLOPT_WRITEDATA, easy_p)
 end
