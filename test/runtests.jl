@@ -19,6 +19,30 @@ function get_header(hdrs::Dict, hdr::AbstractString)
     return values[1]
 end
 
+# URL escape & unescape
+
+function is_url_safe_byte(byte::UInt8)
+    0x2d ≤ byte ≤ 0x2e ||
+    0x30 ≤ byte ≤ 0x39 ||
+    0x41 ≤ byte ≤ 0x5a ||
+    0x61 ≤ byte ≤ 0x7a ||
+    byte == 0x5f ||
+    byte == 0x7e
+end
+
+function url_escape(str::Union{String, SubString{String}})
+    sprint(sizehint = ncodeunits(str)) do io
+        for byte in codeunits(str)
+            if is_url_safe_byte(byte)
+                write(io, byte)
+            else
+                write(io, '%', string(byte, base=16, pad=2))
+            end
+        end
+    end
+end
+url_escape(str::AbstractString) = url_escape(String(str))
+
 const server = "https://httpbingo.org"
 
 @testset "Downloader.jl" begin
@@ -78,5 +102,14 @@ const server = "https://httpbingo.org"
             end
         end
         @test 2t < count*delay
+    end
+
+    @testset "referer" begin
+        dest = "$server/headers"
+        url = "$server/redirect-to?url=$(url_escape(dest))"
+        data = download_json(multi, url)
+        @test "headers" in keys(data)
+        headers′ = data["headers"]
+        @test get_header(headers′, "Referer") == url
     end
 end
