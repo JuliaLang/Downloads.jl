@@ -32,7 +32,7 @@ function get(req::Request, multi = Multi())
         add_header(easy, hdr)
     end
     add_handle(multi, easy)
-    for buf in easy.channel
+    for buf in easy.buffers
         write(req.io, buf)
     end
     remove_handle(multi, easy)
@@ -51,7 +51,7 @@ function download(
         add_header(easy, hdr)
     end
     add_handle(multi, easy)
-    for buf in easy.channel
+    for buf in easy.buffers
         write(io, buf)
     end
     remove_handle(multi, easy)

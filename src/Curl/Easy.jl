@@ -1,6 +1,6 @@
 mutable struct Easy
     handle   :: Ptr{Cvoid}
-    channel  :: Channel{Vector{UInt8}}
+    buffers  :: Channel{Vector{UInt8}}
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
 end
@@ -113,7 +113,7 @@ function write_callback(
     n = size * count
     buf = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    put!(easy.channel, buf)
+    put!(easy.buffers, buf)
     return n
 end
 
