@@ -12,6 +12,11 @@ function download_json(multi::Multi, url::AbstractString, headers = Union{}[])
     JSON.parse(download_string(multi, url, headers))
 end
 
+function get_header(hdrs::Dict, hdr::AbstractString)
+    @test haskey(hdrs, hdr)
+    return hdrs[hdr]
+end
+
 const server = "https://httpbin.org"
 
 @testset "Downloader.jl" begin
@@ -33,23 +38,23 @@ const server = "https://httpbin.org"
         @test "headers" in keys(data)
         headers′ = data["headers"]
         for (key, value) in headers
-            @test headers′[key] == value
+            @test get_header(headers′, key) == value
         end
-        @test get(headers′, "Accept", nothing) == "*/*"
+        @test get_header(headers′, "Accept") == "*/*"
 
         # test setting overriding a default header
         headers = ["Accept" => "application/tar"]
         data = download_json(multi, url, headers)
         @test "headers" in keys(data)
         headers′ = data["headers"]
-        @test get(headers′, "Accept", nothing) == "application/tar"
+        @test get_header(headers′, "Accept") == "application/tar"
 
         # test setting overriding a default header with empty value
         headers = ["Accept" => ""]
         data = download_json(multi, url, headers)
         @test "headers" in keys(data)
         headers′ = data["headers"]
-        @test get(headers′, "Accept", nothing) == ""
+        @test get_header(headers′, "Accept") == ""
 
         # test deleting a default header
         headers = ["Accept" => nothing]
