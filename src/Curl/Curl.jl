@@ -1,6 +1,12 @@
 module Curl
 
-export Multi, Easy, add_handle, remove_handle, set_url, add_header
+export
+    Easy,
+        set_url,
+        add_header,
+    Multi,
+        add_handle,
+        remove_handle
 
 using LibCURL
 

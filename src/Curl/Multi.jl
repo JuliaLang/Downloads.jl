@@ -1,6 +1,6 @@
 mutable struct Multi
-    handle::Ptr{Cvoid}
-    timer::Ptr{Cvoid}
+    handle :: Ptr{Cvoid}
+    timer  :: Ptr{Cvoid}
 end
 
 function Multi()
@@ -118,8 +118,6 @@ function socket_callback(
     end
     return 0
 end
-
-# add callbacks to multi handle
 
 function add_callbacks(multi::Multi)
     # stash multi handle pointer in timer

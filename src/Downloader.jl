@@ -8,7 +8,7 @@ using .Curl
 function download(
     multi::Multi,
     url::AbstractString,
-    io::IO,
+    io::IO = stdout,
     headers = Union{}[],
 )
     easy = Easy()
@@ -22,6 +22,14 @@ function download(
     end
     remove_handle(multi, easy)
     return io
+end
+
+function download(
+    url::AbstractString,
+    io::IO = stdout,
+    headers = Union{}[],
+)
+    download(Multi(), url, io, headers)
 end
 
 end # module
