@@ -4,6 +4,7 @@ export
     Easy,
         set_url,
         add_header,
+        enable_progress,
         get_effective_url,
         get_response_code,
         get_response_headers,
@@ -12,6 +13,8 @@ export
         remove_handle
 
 using LibCURL
+using LibCURL: curl_off_t
+# not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
 
 include("utils.jl")
 

@@ -106,5 +106,15 @@ include("setup.jl")
             headers′ = data["headers"]
             @test header(headers′, "Referer") == url
         end
+
+        @testset "progress" begin
+            progress = Downloader.Curl.Progress[]
+            req = Request(devnull, "https://httpbin.org/drip", String[])
+            Downloader.get(req, multi, p -> push!(progress, p))
+            unique!(progress)
+            @test length(progress) == 11
+            @test all(p.dl_total == 10(i≠1) for (i, p) in enumerate(progress))
+            @test all(p.dl_now   == i-1     for (i, p) in enumerate(progress))
+        end
     end
 end

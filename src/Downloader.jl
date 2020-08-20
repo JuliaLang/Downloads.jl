@@ -25,15 +25,21 @@ function Response(easy::Easy)
     return Response(url, status, response, headers)
 end
 
-function get(req::Request, multi = Multi())
+function get(req::Request, multi = Multi(), progress = p -> nothing)
     easy = Easy()
     set_url(easy, req.url)
     for hdr in req.headers
         add_header(easy, hdr)
     end
+    enable_progress(easy, true)
     add_handle(multi, easy)
-    for buf in easy.buffers
-        write(req.io, buf)
+    @sync begin
+        @async for buf in easy.buffers
+            write(req.io, buf)
+        end
+        @async for prog in easy.progress
+            progress(prog)
+        end
     end
     remove_handle(multi, easy)
     return Response(easy)
