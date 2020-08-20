@@ -14,10 +14,12 @@ end
 
 function get_header(hdrs::Dict, hdr::AbstractString)
     @test haskey(hdrs, hdr)
-    return hdrs[hdr]
+    values = hdrs[hdr]
+    @test length(values) == 1
+    return values[1]
 end
 
-const server = "https://httpbin.org"
+const server = "https://httpbingo.org"
 
 @testset "Downloader.jl" begin
     multi = Multi()
