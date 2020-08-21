@@ -12,11 +12,35 @@ function download_json(multi::Multi, url::AbstractString, headers = Union{}[])
     JSON.parse(download_body(multi, url, headers))
 end
 
+function get_body(multi::Multi, url::AbstractString, headers = Union{}[])
+    resp = nothing
+    body = sprint() do io
+        req = Request(io, url, headers)
+        resp = Downloader.get(req, multi)
+    end
+    return resp, body
+end
+
+function get_json(multi::Multi, url::AbstractString, headers = Union{}[])
+    resp, body = get_body(multi, url, headers)
+    return resp, JSON.parse(body)
+end
+
 function header(hdrs::Dict, hdr::AbstractString)
-    @test haskey(hdrs, hdr)
-    values = hdrs[hdr]
-    @test length(values) == 1
-    return values[1]
+    hdr = lowercase(hdr)
+    for (key, values) in hdrs
+        lowercase(key) == hdr || continue
+        values isa Vector || error("header value should be a vector")
+        length(values) == 1 || error("header value should have length 1")
+        return values[1]
+    end
+    error("header not found")
+end
+
+function test_response_string(response::AbstractString, status::Integer)
+    m = match(r"^HTTP/\d+(?:\.\d+)?\s+(\d+)\b", response)
+    @test m !== nothing
+    @test parse(Int, m.captures[1]) == status
 end
 
 # URL escape & unescape

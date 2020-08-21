@@ -69,4 +69,42 @@ include("setup.jl")
         headers′ = data["headers"]
         @test header(headers′, "Referer") == url
     end
+
+    @testset "get API" begin
+        @testset "basic get usage" begin
+            for status in (200, 300, 400)
+                url = "$server/status/$status"
+                resp = get_body(multi, url)[1]
+                @test resp.url == url
+                @test resp.status == status
+                test_response_string(resp.response, status)
+                @test all(hdr isa Pair{String,String} for hdr in resp.headers)
+                headers = Dict(resp.headers)
+                @test "content-type" in keys(headers)
+            end
+        end
+
+        @testset "custom headers" begin
+            url = "$server/response-headers?FooBar=VaLuE"
+            resp, data = get_body(multi, url)
+            @test resp.url == url
+            @test resp.status == 200
+            test_response_string(resp.response, 200)
+            headers = Dict(resp.headers)
+            @test "foobar" in keys(headers)
+            @test headers["foobar"] == "VaLuE"
+        end
+
+        @testset "url for redirect" begin
+            dest = "$server/headers"
+            url = "$server/redirect-to?url=$(url_escape(dest))"
+            resp, data = get_json(multi, url)
+            @test resp.url == dest
+            @test resp.status == 200
+            test_response_string(resp.response, 200)
+            @test "headers" in keys(data)
+            headers′ = data["headers"]
+            @test header(headers′, "Referer") == url
+        end
+    end
 end
