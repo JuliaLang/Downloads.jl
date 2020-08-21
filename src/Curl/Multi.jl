@@ -34,7 +34,8 @@ function check_multi_info(multi::Multi)
             @check curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, easy_p_ref)
             easy = unsafe_pointer_to_objref(easy_p_ref[])::Easy
             @assert easy_handle == easy.handle
-            close(easy.channel)
+            close(easy.progress)
+            close(easy.buffers)
         else
             @async @info("unknown CURL message type", msg = message.msg)
         end

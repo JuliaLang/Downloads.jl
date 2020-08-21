@@ -1,6 +1,14 @@
+struct Progress
+    dl_total :: curl_off_t
+    dl_now   :: curl_off_t
+    ul_total :: curl_off_t
+    ul_now   :: curl_off_t
+end
+
 mutable struct Easy
     handle   :: Ptr{Cvoid}
-    channel  :: Channel{Vector{UInt8}}
+    progress :: Channel{Progress}
+    buffers  :: Channel{Vector{UInt8}}
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
 end
@@ -8,6 +16,7 @@ end
 function Easy()
     easy = Easy(
         curl_easy_init(),
+        Channel{Progress}(Inf),
         Channel{Vector{UInt8}}(Inf),
         C_NULL,
         String[],
@@ -53,6 +62,10 @@ add_header(easy::Easy, key::AbstractString, val::AbstractString) =
 add_header(easy::Easy, key::AbstractString, val::Nothing) =
     add_header(easy, "$key:")
 add_header(easy::Easy, pair::Pair) = add_header(easy, pair...)
+
+function enable_progress(easy::Easy, on::Bool)
+    @check curl_easy_setopt(easy.handle, CURLOPT_NOPROGRESS, !on)
+end
 
 # response info
 
@@ -113,8 +126,20 @@ function write_callback(
     n = size * count
     buf = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    put!(easy.channel, buf)
+    put!(easy.buffers, buf)
     return n
+end
+
+function progress_callback(
+    easy_p   :: Ptr{Cvoid},
+    dl_total :: curl_off_t,
+    dl_now   :: curl_off_t,
+    ul_total :: curl_off_t,
+    ul_now   :: curl_off_t,
+)::Cint
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    put!(easy.progress, Progress(dl_total, dl_now, ul_total, ul_now))
+    return 0
 end
 
 function add_callbacks(easy::Easy)
@@ -133,4 +158,10 @@ function add_callbacks(easy::Easy)
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
     @check curl_easy_setopt(easy.handle, CURLOPT_WRITEFUNCTION, write_cb)
     @check curl_easy_setopt(easy.handle, CURLOPT_WRITEDATA, easy_p)
+
+    # set progress callbacks
+    progress_cb = @cfunction(progress_callback,
+        Cint, (Ptr{Cvoid}, curl_off_t, curl_off_t, curl_off_t, curl_off_t))
+    @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFOFUNCTION, progress_cb)
+    @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFODATA, easy_p)
 end
