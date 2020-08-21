@@ -109,6 +109,7 @@ include("setup.jl")
 
         @testset "progress" begin
             progress = Downloader.Curl.Progress[]
+            # https://httpbingo.org/drop doesn't work
             req = Request(devnull, "https://httpbin.org/drip", String[])
             Downloader.get(req, multi, p -> push!(progress, p))
             unique!(progress)
