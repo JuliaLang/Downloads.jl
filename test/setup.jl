@@ -2,17 +2,17 @@ using Test, JSON
 using Downloader
 using Downloader.Curl
 
-function download_string(multi::Multi, url::AbstractString, headers = Union{}[])
+function download_body(multi::Multi, url::AbstractString, headers = Union{}[])
     sprint() do io
         Downloader.download(multi, url, io, headers)
     end
 end
 
 function download_json(multi::Multi, url::AbstractString, headers = Union{}[])
-    JSON.parse(download_string(multi, url, headers))
+    JSON.parse(download_body(multi, url, headers))
 end
 
-function get_header(hdrs::Dict, hdr::AbstractString)
+function header(hdrs::Dict, hdr::AbstractString)
     @test haskey(hdrs, hdr)
     values = hdrs[hdr]
     @test length(values) == 1

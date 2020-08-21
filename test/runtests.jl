@@ -17,23 +17,23 @@ include("setup.jl")
         @test "headers" in keys(data)
         headers′ = data["headers"]
         for (key, value) in headers
-            @test get_header(headers′, key) == value
+            @test header(headers′, key) == value
         end
-        @test get_header(headers′, "Accept") == "*/*"
+        @test header(headers′, "Accept") == "*/*"
 
         # test setting overriding a default header
         headers = ["Accept" => "application/tar"]
         data = download_json(multi, url, headers)
         @test "headers" in keys(data)
         headers′ = data["headers"]
-        @test get_header(headers′, "Accept") == "application/tar"
+        @test header(headers′, "Accept") == "application/tar"
 
         # test setting overriding a default header with empty value
         headers = ["Accept" => ""]
         data = download_json(multi, url, headers)
         @test "headers" in keys(data)
         headers′ = data["headers"]
-        @test get_header(headers′, "Accept") == ""
+        @test header(headers′, "Accept") == ""
 
         # test deleting a default header
         headers = ["Accept" => nothing]
@@ -63,6 +63,6 @@ include("setup.jl")
         data = download_json(multi, url)
         @test "headers" in keys(data)
         headers′ = data["headers"]
-        @test get_header(headers′, "Referer") == url
+        @test header(headers′, "Referer") == url
     end
 end
