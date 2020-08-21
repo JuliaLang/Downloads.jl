@@ -13,10 +13,14 @@ function download_json(multi::Multi, url::AbstractString, headers = Union{}[])
 end
 
 function header(hdrs::Dict, hdr::AbstractString)
-    @test haskey(hdrs, hdr)
-    values = hdrs[hdr]
-    @test length(values) == 1
-    return values[1]
+    hdr = lowercase(hdr)
+    for (key, values) in hdrs
+        lowercase(key) == hdr || continue
+        values isa Vector || error("header value should be a vector")
+        length(values) == 1 || error("header value should have length 1")
+        return values[1]
+    end
+    error("header not found")
 end
 
 # URL escape & unescape
