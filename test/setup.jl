@@ -1,3 +1,14 @@
+# this is needed for testing Downloader as a stdlib
+# in normal testing it has no effect
+if true
+    import Pkg
+    temp = mktempdir()
+    Pkg.activate(temp)
+    Pkg.add("JSON")
+    insert!(LOAD_PATH, 2, temp)
+    Pkg.activate()
+end
+
 using Test, JSON
 using Downloader
 using Downloader.Curl
