@@ -1,6 +1,8 @@
-using Test, JSON
+using Test
 using Downloader
 using Downloader.Curl
+
+include("json.jl")
 
 function download_body(multi::Multi, url::AbstractString, headers = Union{}[])
     sprint() do io
@@ -9,7 +11,7 @@ function download_body(multi::Multi, url::AbstractString, headers = Union{}[])
 end
 
 function download_json(multi::Multi, url::AbstractString, headers = Union{}[])
-    JSON.parse(download_body(multi, url, headers))
+    json.parse(download_body(multi, url, headers))
 end
 
 function get_body(multi::Multi, url::AbstractString, headers = Union{}[])
@@ -23,7 +25,7 @@ end
 
 function get_json(multi::Multi, url::AbstractString, headers = Union{}[])
     resp, body = get_body(multi, url, headers)
-    return resp, JSON.parse(body)
+    return resp, json.parse(body)
 end
 
 function header(hdrs::Dict, hdr::AbstractString)
