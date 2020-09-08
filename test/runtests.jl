@@ -113,9 +113,10 @@ include("setup.jl")
             req = Request(devnull, "https://httpbin.org/drip", String[])
             Downloader.get(req, multi, p -> push!(progress, p))
             unique!(progress)
-            @test length(progress) == 11
-            @test all(p.dl_total == 10(i≠1) for (i, p) in enumerate(progress))
-            @test all(p.dl_now   == i-1     for (i, p) in enumerate(progress))
+            @test 11 ≤ length(progress) ≤ 12
+            shift = length(progress) - 10
+            @test all(p.dl_total == (i==1 ? 0 : 10) for (i, p) in enumerate(progress))
+            @test all(p.dl_now   == max(0, i-shift) for (i, p) in enumerate(progress))
         end
     end
 end
