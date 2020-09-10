@@ -48,6 +48,9 @@ include("setup.jl")
     end
 
     @testset "errors" begin
+        @test_throws ArgumentError Downloads.download("ba\0d")
+        @test_throws ArgumentError Downloads.download("good", "ba\0d")
+
         err = @exception Downloads.download("xyz://invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Protocol \"xyz\" not supported")

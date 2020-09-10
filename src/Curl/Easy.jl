@@ -51,11 +51,16 @@ function set_defaults(easy::Easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_CAINFO, certs_file)
 end
 
-function set_url(easy::Easy, url::AbstractString)
+function set_url(easy::Easy, url::Union{String, SubString{String}})
+    # TODO: ideally, Clang would generate Cstring signatures
+    Base.unsafe_convert(Cstring, url) # error checking
     @check curl_easy_setopt(easy.handle, CURLOPT_URL, url)
 end
+set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
+    # TODO: ideally, Clang would generate Cstring signatures
+    Base.unsafe_convert(Cstring, hdr) # error checking
     easy.req_hdrs = curl_slist_append(easy.req_hdrs, hdr)
     @check curl_easy_setopt(easy.handle, CURLOPT_HTTPHEADER, easy.req_hdrs)
 end
