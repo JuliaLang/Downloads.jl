@@ -70,8 +70,8 @@ include("setup.jl")
         @test header(headers′, "Referer") == url
     end
 
-    @testset "get API" begin
-        @testset "basic get usage" begin
+    @testset "request API" begin
+        @testset "basic request usage" begin
             for status in (200, 300, 400)
                 url = "$server/status/$status"
                 resp = request_body(multi, url)[1]
