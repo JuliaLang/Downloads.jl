@@ -1,9 +1,81 @@
 module Download
 
-export Request, Response, download
-
 include("Curl/Curl.jl")
 using .Curl
+
+## Base download API ##
+
+export download
+
+struct Downloader
+    multi::Multi
+    Downloader() = new(Multi())
+end
+
+const DEFAULT_DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
+
+function default_downloader()::Downloader
+    DEFAULT_DOWNLOADER[] isa Downloader && return DEFAULT_DOWNLOADER[]
+    DEFAULT_DOWNLOADER[] = Downloader()
+end
+
+const Headers = Union{AbstractVector, AbstractDict}
+
+function download(
+    url::AbstractString,
+    io::IO;
+    headers::Headers = Pair{String,String}[],
+    downloader::Downloader = default_downloader(),
+)
+    easy = Easy()
+    set_url(easy, url)
+    for hdr in headers
+        hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
+            throw(ArgumentError("invalid header: $(repr(hdr))"))
+        add_header(easy, hdr)
+    end
+    add_handle(downloader.multi, easy)
+    for buf in easy.buffers
+        write(io, buf)
+    end
+    remove_handle(downloader.multi, easy)
+    status = get_response_code(easy)
+    status == 200 && return io
+    response, _ = get_response_headers(easy)
+    error("download failed: $response")
+end
+
+function download(
+    url::AbstractString,
+    path::AbstractString,
+    headers::Headers = Pair{String,String}[],
+    downloader::Downloader = default_downloader(),
+)
+    open(path, write=true) do io
+        download(url, io, headers = headers, downloader = downloader)
+    end
+    return path
+end
+
+function download(
+    url::AbstractString,
+    headers::Headers = Pair{String,String}[],
+    downloader::Downloader = default_downloader(),
+)
+    path, io = mktemp()
+    try download(url, io, headers = headers, downloader = downloader)
+    catch
+        close(io)
+        rm(path, force=true)
+        rethrow()
+    end
+    close(io)
+    return path
+end
+
+## experimental request API ##
+
+export request, Request, Response
 
 struct Request
     io::IO
@@ -18,14 +90,7 @@ struct Response
     headers::Vector{Pair{String,String}}
 end
 
-function Response(easy::Easy)
-    url = get_effective_url(easy)
-    status = get_response_code(easy)
-    response, headers = get_response_headers(easy)
-    return Response(url, status, response, headers)
-end
-
-function get(req::Request, multi = Multi(), progress = p -> nothing)
+function request(req::Request, multi = Multi(), progress = p -> nothing)
     easy = Easy()
     set_url(easy, req.url)
     for hdr in req.headers
@@ -42,34 +107,10 @@ function get(req::Request, multi = Multi(), progress = p -> nothing)
         end
     end
     remove_handle(multi, easy)
-    return Response(easy)
-end
-
-function download(
-    multi::Multi,
-    url::AbstractString,
-    io::IO = stdout,
-    headers = Union{}[],
-)
-    easy = Easy()
-    set_url(easy, url)
-    for hdr in headers
-        add_header(easy, hdr)
-    end
-    add_handle(multi, easy)
-    for buf in easy.buffers
-        write(io, buf)
-    end
-    remove_handle(multi, easy)
-    return io
-end
-
-function download(
-    url::AbstractString,
-    io::IO = stdout,
-    headers = Union{}[],
-)
-    download(Multi(), url, io, headers)
+    url = get_effective_url(easy)
+    status = get_response_code(easy)
+    response, headers = get_response_headers(easy)
+    return Response(url, status, response, headers)
 end
 
 end # module
