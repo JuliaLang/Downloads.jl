@@ -41,8 +41,12 @@ function download(
     remove_handle(downloader.multi, easy)
     status = get_response_code(easy)
     status == 200 && return io
-    response, _ = get_response_headers(easy)
-    error("download failed: $response")
+    if easy.code == Curl.CURLE_OK
+        message = get_response_headers(easy)[1]
+    else
+        message = GC.@preserve easy unsafe_string(pointer(easy.errbuf))
+    end
+    error(message)
 end
 
 function download(

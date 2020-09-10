@@ -47,6 +47,20 @@ include("setup.jl")
         end
     end
 
+    @testset "errors" begin
+        err = @exception Download.download("xyz://invalid")
+        @test err isa ErrorException
+        @test startswith(err.msg, "Protocol \"xyz\" not supported")
+
+        err = @exception Download.download("https://invalid")
+        @test err isa ErrorException
+        @test startswith(err.msg, "Could not resolve host")
+
+        err = @exception Download.download("$server/status/404")
+        @test err isa ErrorException
+        @test contains(err.msg, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+    end
+
     @testset "concurrent requests" begin
         count = 10
         delay = 2
