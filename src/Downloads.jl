@@ -51,29 +51,17 @@ end
 
 function download(
     url::AbstractString,
-    path::AbstractString,
+    path::AbstractString = tempname(),
     headers::Headers = Pair{String,String}[],
     downloader::Downloader = default_downloader(),
 )
-    open(path, write=true) do io
-        download(url, io, headers = headers, downloader = downloader)
-    end
-    return path
-end
-
-function download(
-    url::AbstractString,
-    headers::Headers = Pair{String,String}[],
-    downloader::Downloader = default_downloader(),
-)
-    path, io = mktemp()
-    try download(url, io, headers = headers, downloader = downloader)
+    try open(path, write=true) do io
+            download(url, io, headers = headers, downloader = downloader)
+        end
     catch
-        close(io)
         rm(path, force=true)
         rethrow()
     end
-    close(io)
     return path
 end
 
