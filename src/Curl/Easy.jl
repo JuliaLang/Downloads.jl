@@ -11,6 +11,8 @@ mutable struct Easy
     buffers  :: Channel{Vector{UInt8}}
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
+    code     :: CURLcode
+    errbuf   :: Vector{UInt8}
 end
 
 function Easy()
@@ -20,6 +22,8 @@ function Easy()
         Channel{Vector{UInt8}}(Inf),
         C_NULL,
         String[],
+        typemax(CURLcode),
+        zeros(UInt8, CURL_ERROR_SIZE),
     )
     finalizer(easy) do easy
         curl_easy_cleanup(easy.handle)
@@ -146,6 +150,10 @@ function add_callbacks(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_PRIVATE, easy_p)
+
+    # pointer to error buffer
+    errbuf_p = pointer(easy.errbuf)
+    @check curl_easy_setopt(easy.handle, CURLOPT_ERRORBUFFER, errbuf_p)
 
     # set header callback
     header_cb = @cfunction(header_callback,

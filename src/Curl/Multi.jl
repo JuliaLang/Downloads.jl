@@ -34,6 +34,7 @@ function check_multi_info(multi::Multi)
             @check curl_easy_getinfo(easy_handle, CURLINFO_PRIVATE, easy_p_ref)
             easy = unsafe_pointer_to_objref(easy_p_ref[])::Easy
             @assert easy_handle == easy.handle
+            easy.code = message.code
             close(easy.progress)
             close(easy.buffers)
         else
@@ -76,9 +77,12 @@ function timer_callback(
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
     @assert handle_p == multi.handle
-    if timeout_ms ≥ 0
+    if timeout_ms == 0
+        @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+        check_multi_info(multi)
+    elseif timeout_ms > 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)
+        uv_timer_start(multi.timer, timeout_cb, timeout_ms, 0)
     else
         uv_timer_stop(multi.timer)
     end

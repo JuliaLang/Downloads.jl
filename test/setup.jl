@@ -4,6 +4,10 @@ using Download.Curl
 
 include("json.jl")
 
+if VERSION < v"1.5"
+    contains(haystack, needle) = occursin(needle, haystack)
+end
+
 function download_body(url::AbstractString, headers = Union{}[])
     sprint() do io
         Download.download(url, io, headers = headers)
@@ -43,6 +47,15 @@ function test_response_string(response::AbstractString, status::Integer)
     m = match(r"^HTTP/\d+(?:\.\d+)?\s+(\d+)\b", response)
     @test m !== nothing
     @test parse(Int, m.captures[1]) == status
+end
+
+macro exception(ex)
+    quote
+        try $(esc(ex))
+        catch err
+            err
+        end
+    end
 end
 
 # URL escape & unescape
