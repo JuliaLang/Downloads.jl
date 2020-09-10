@@ -1,6 +1,6 @@
 include("setup.jl")
 
-@testset "Download.jl" begin
+@testset "Downloads.jl" begin
     @testset "get request" begin
         url = "$server/get"
         data = download_json(url)
@@ -48,15 +48,15 @@ include("setup.jl")
     end
 
     @testset "errors" begin
-        err = @exception Download.download("xyz://invalid")
+        err = @exception Downloads.download("xyz://invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Protocol \"xyz\" not supported")
 
-        err = @exception Download.download("https://invalid")
+        err = @exception Downloads.download("https://invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Could not resolve host")
 
-        err = @exception Download.download("$server/status/404")
+        err = @exception Downloads.download("$server/status/404")
         @test err isa ErrorException
         @test contains(err.msg, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
     end
@@ -122,10 +122,10 @@ include("setup.jl")
         end
 
         @testset "progress" begin
-            progress = Download.Curl.Progress[]
+            progress = Downloads.Curl.Progress[]
             # https://httpbingo.org/drop doesn't work
             req = Request(devnull, "https://httpbin.org/drip", String[])
-            Download.request(req, multi, p -> push!(progress, p))
+            Downloads.request(req, multi, p -> push!(progress, p))
             unique!(progress)
             @test 11 ≤ length(progress) ≤ 12
             shift = length(progress) - 10

@@ -1,4 +1,4 @@
-module Download
+module Downloads
 
 include("Curl/Curl.jl")
 using .Curl
