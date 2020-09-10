@@ -1,6 +1,6 @@
 include("setup.jl")
 
-@testset "Downloader.jl" begin
+@testset "Download.jl" begin
     @testset "get request" begin
         url = "$server/get"
         data = download_json(multi, url)
@@ -108,10 +108,10 @@ include("setup.jl")
         end
 
         @testset "progress" begin
-            progress = Downloader.Curl.Progress[]
+            progress = Download.Curl.Progress[]
             # https://httpbingo.org/drop doesn't work
             req = Request(devnull, "https://httpbin.org/drip", String[])
-            Downloader.get(req, multi, p -> push!(progress, p))
+            Download.get(req, multi, p -> push!(progress, p))
             unique!(progress)
             @test 11 ≤ length(progress) ≤ 12
             shift = length(progress) - 10

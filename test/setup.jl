@@ -1,12 +1,12 @@
 using Test
-using Downloader
-using Downloader.Curl
+using Download
+using Download.Curl
 
 include("json.jl")
 
 function download_body(multi::Multi, url::AbstractString, headers = Union{}[])
     sprint() do io
-        Downloader.download(multi, url, io, headers)
+        Download.download(multi, url, io, headers)
     end
 end
 
@@ -18,7 +18,7 @@ function get_body(multi::Multi, url::AbstractString, headers = Union{}[])
     resp = nothing
     body = sprint() do io
         req = Request(io, url, headers)
-        resp = Downloader.get(req, multi)
+        resp = Download.get(req, multi)
     end
     return resp, body
 end

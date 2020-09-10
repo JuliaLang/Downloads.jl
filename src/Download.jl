@@ -1,4 +1,4 @@
-module Downloader
+module Download
 
 export Request, Response, download
 
