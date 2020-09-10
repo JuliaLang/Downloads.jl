@@ -59,6 +59,10 @@ include("setup.jl")
         err = @exception Downloads.download("$server/status/404")
         @test err isa ErrorException
         @test contains(err.msg, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+
+        path = tempname()
+        @test_throws ErrorException Downloads.download("$server/status/404", path)
+        @test !ispath(path)
     end
 
     @testset "concurrent requests" begin
