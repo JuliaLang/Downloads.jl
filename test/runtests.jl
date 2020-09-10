@@ -3,7 +3,7 @@ include("setup.jl")
 @testset "Download.jl" begin
     @testset "get request" begin
         url = "$server/get"
-        data = download_json(multi, url)
+        data = download_json(url)
         @test "url" in keys(data)
         @test data["url"] == url
     end
@@ -13,7 +13,7 @@ include("setup.jl")
 
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
-            data = download_json(multi, url, headers)
+            data = download_json(url, headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             for (key, value) in headers
@@ -24,7 +24,7 @@ include("setup.jl")
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
-            data = download_json(multi, url, headers)
+            data = download_json(url, headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test header(headers′, "Accept") == "application/tar"
@@ -32,7 +32,7 @@ include("setup.jl")
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
-            data = download_json(multi, url, headers)
+            data = download_json(url, headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test header(headers′, "Accept") == ""
@@ -40,7 +40,7 @@ include("setup.jl")
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
-            data = download_json(multi, url, headers)
+            data = download_json(url, headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test !("Accept" in keys(headers′))
@@ -53,7 +53,7 @@ include("setup.jl")
         url = "https://httpbin.org/delay/$delay"
         t = @elapsed @sync for id = 1:count
             @async begin
-                data = download_json(multi, "$url?id=$id")
+                data = download_json("$url?id=$id")
                 @test "args" in keys(data)
                 @test get(data["args"], "id", nothing) == "$id"
             end
@@ -64,7 +64,7 @@ include("setup.jl")
     @testset "referer" begin
         dest = "$server/headers"
         url = "$server/redirect-to?url=$(url_escape(dest))"
-        data = download_json(multi, url)
+        data = download_json(url)
         @test "headers" in keys(data)
         headers′ = data["headers"]
         @test header(headers′, "Referer") == url
@@ -74,7 +74,7 @@ include("setup.jl")
         @testset "basic get usage" begin
             for status in (200, 300, 400)
                 url = "$server/status/$status"
-                resp = get_body(multi, url)[1]
+                resp = request_body(multi, url)[1]
                 @test resp.url == url
                 @test resp.status == status
                 test_response_string(resp.response, status)
@@ -86,7 +86,7 @@ include("setup.jl")
 
         @testset "custom headers" begin
             url = "$server/response-headers?FooBar=VaLuE"
-            resp, data = get_body(multi, url)
+            resp, data = request_body(multi, url)
             @test resp.url == url
             @test resp.status == 200
             test_response_string(resp.response, 200)
@@ -98,7 +98,7 @@ include("setup.jl")
         @testset "url for redirect" begin
             dest = "$server/headers"
             url = "$server/redirect-to?url=$(url_escape(dest))"
-            resp, data = get_json(multi, url)
+            resp, data = request_json(multi, url)
             @test resp.url == dest
             @test resp.status == 200
             test_response_string(resp.response, 200)
@@ -111,7 +111,7 @@ include("setup.jl")
             progress = Download.Curl.Progress[]
             # https://httpbingo.org/drop doesn't work
             req = Request(devnull, "https://httpbin.org/drip", String[])
-            Download.get(req, multi, p -> push!(progress, p))
+            Download.request(req, multi, p -> push!(progress, p))
             unique!(progress)
             @test 11 ≤ length(progress) ≤ 12
             shift = length(progress) - 10

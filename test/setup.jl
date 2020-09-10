@@ -4,27 +4,27 @@ using Download.Curl
 
 include("json.jl")
 
-function download_body(multi::Multi, url::AbstractString, headers = Union{}[])
+function download_body(url::AbstractString, headers = Union{}[])
     sprint() do io
-        Download.download(multi, url, io, headers)
+        Download.download(url, io, headers = headers)
     end
 end
 
-function download_json(multi::Multi, url::AbstractString, headers = Union{}[])
-    json.parse(download_body(multi, url, headers))
+function download_json(url::AbstractString, headers = Union{}[])
+    json.parse(download_body(url, headers))
 end
 
-function get_body(multi::Multi, url::AbstractString, headers = Union{}[])
+function request_body(multi::Multi, url::AbstractString, headers = Union{}[])
     resp = nothing
     body = sprint() do io
         req = Request(io, url, headers)
-        resp = Download.get(req, multi)
+        resp = Download.request(req, multi)
     end
     return resp, body
 end
 
-function get_json(multi::Multi, url::AbstractString, headers = Union{}[])
-    resp, body = get_body(multi, url, headers)
+function request_json(multi::Multi, url::AbstractString, headers = Union{}[])
+    resp, body = request_body(multi, url, headers)
     return resp, json.parse(body)
 end
 
