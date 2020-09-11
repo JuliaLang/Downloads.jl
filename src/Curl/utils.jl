@@ -6,7 +6,7 @@ jl_malloc(n::Integer) = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), n)
 
 # check if a function or C call failed
 
-macro check(ex::Expr)
+function check(ex::Expr, lock::Bool)
     ex.head == :call ||
         error("@check: not a call: $ex")
     if ex.args[1] == :ccall
@@ -17,12 +17,24 @@ macro check(ex::Expr)
         f = ex.args[1] :: Symbol
     end
     prefix = "$f: "
+    ex = esc(ex)
+    if lock
+        ex = quote
+            Base.iolock_begin()
+            value = $ex
+            Base.iolock_end()
+            value
+        end
+    end
     quote
-        r = $(esc(ex))
+        r = $ex
         iszero(r) || @async @error($prefix * string(r))
         nothing
     end
 end
+
+macro check(ex::Expr) check(ex, false) end
+macro check_iolock(ex::Expr) check(ex, true) end
 
 # some libuv wrappers
 
@@ -35,33 +47,37 @@ function uv_poll_alloc()
 end
 
 function uv_poll_init(p::Ptr{Cvoid}, sock::curl_socket_t)
-    @check ccall(:uv_poll_init, Cint,
+    @check_iolock ccall(:uv_poll_init, Cint,
         (Ptr{Cvoid}, Ptr{Cvoid}, curl_socket_t), Base.eventloop(), p, sock)
 end
 
 function uv_poll_start(p::Ptr{Cvoid}, events::Integer, cb::Ptr{Cvoid})
-    @check ccall(:uv_poll_start, Cint, (Ptr{Cvoid}, Cint, Ptr{Cvoid}), p, events, cb)
+    @check_iolock ccall(:uv_poll_start, Cint,
+        (Ptr{Cvoid}, Cint, Ptr{Cvoid}), p, events, cb)
 end
 
 function uv_poll_stop(p::Ptr{Cvoid})
-    @check ccall(:uv_poll_stop, Cint, (Ptr{Cvoid},), p)
+    @check_iolock ccall(:uv_poll_stop, Cint, (Ptr{Cvoid},), p)
 end
 
 function uv_close(p::Ptr{Cvoid}, cb::Ptr{Cvoid})
+    Base.iolock_begin()
     ccall(:uv_close, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), p, cb)
+    Base.iolock_end()
 end
 
 function uv_timer_init(p::Ptr{Cvoid})
-    @check ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), Base.eventloop(), p)
+    @check_iolock ccall(:uv_timer_init, Cint,
+        (Ptr{Cvoid}, Ptr{Cvoid}), Base.eventloop(), p)
 end
 
 function uv_timer_start(p::Ptr{Cvoid}, cb::Ptr{Cvoid}, t::Integer, r::Integer)
-    @check ccall(:uv_timer_start, Cint,
+    @check_iolock ccall(:uv_timer_start, Cint,
         (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64), p, cb, t, r)
 end
 
 function uv_timer_stop(p::Ptr{Cvoid})
-    @check ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), p)
+    @check_iolock ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), p)
 end
 
 # additional libcurl methods
