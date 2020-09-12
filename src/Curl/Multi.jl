@@ -77,12 +77,16 @@ function timer_callback(
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
     @assert handle_p == multi.handle
-    if timeout_ms == 0
-        @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-        check_multi_info(multi)
-    elseif timeout_ms > 0
-        timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(multi.timer, timeout_cb, timeout_ms, 0)
+    if timeout_ms >= 0
+        # FIXME: ideally we wouldn't special case Windows here
+        if !Sys.iswindows() && timeout_ms == 0
+            @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+            check_multi_info(multi)
+        end
+        if Sys.iswindows() || timeout_ms > 0
+            timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
+            uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)
+        end
     else
         uv_timer_stop(multi.timer)
     end
