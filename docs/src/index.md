@@ -1,0 +1,5 @@
+# Downloads
+
+```@docs
+Downloads.download
+```

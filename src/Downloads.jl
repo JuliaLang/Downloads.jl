@@ -21,6 +21,24 @@ end
 
 const Headers = Union{AbstractVector, AbstractDict}
 
+"""
+    download(url, [ path = tempfile() ]; [ headers ]) -> path
+    download(url, io; [ headers ]) -> io
+
+        url     :: AbstractString
+        path    :: AbstractString
+        io      :: IO
+        headers :: Union{AbstractVector, AbstractDict}
+
+Download a file from the given url, saving it to the location `path`, or if not
+specified, a temporary path. Returns the path of the downloaded file. If the
+second argument is an IO handle instead of a path, the body of the downloaded
+URL is written to the handle instead and the handle is returned.
+
+If the `headers` keyword argument is provided, it must be a vector or dictionary
+whose elements are all pairs of strings. These pairs are passed as headers when
+downloading URLs with protocols that supports them, such as HTTP/S.
+"""
 function download(
     url::AbstractString,
     io::IO;
