@@ -83,4 +83,4 @@ end
 url_escape(str::AbstractString) = url_escape(String(str))
 
 const multi = Multi()
-const server = "https://httpbingo.org"
+const server = "https://httpbingo.julialang.org"
