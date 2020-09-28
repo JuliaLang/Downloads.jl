@@ -71,12 +71,12 @@ include("setup.jl")
     @testset "concurrent requests" begin
         count = 10
         delay = 2
-        url = "https://httpbin.org/delay/$delay"
+        url = "$server/delay/$delay"
         t = @elapsed @sync for id = 1:count
             @async begin
                 data = download_json("$url?id=$id")
                 @test "args" in keys(data)
-                @test get(data["args"], "id", nothing) == "$id"
+                @test get(data["args"], "id", nothing) == ["$id"]
             end
         end
         @test 2t < count*delay
@@ -101,7 +101,7 @@ include("setup.jl")
                 test_response_string(resp.response, status)
                 @test all(hdr isa Pair{String,String} for hdr in resp.headers)
                 headers = Dict(resp.headers)
-                @test "content-type" in keys(headers)
+                @test "content-length" in keys(headers)
             end
         end
 
@@ -130,7 +130,7 @@ include("setup.jl")
 
         @testset "progress" begin
             progress = Downloads.Curl.Progress[]
-            # https://httpbingo.org/drop doesn't work
+            # https://httpbingo.org/drip doesn't work
             req = Request(devnull, "https://httpbin.org/drip", String[])
             Downloads.request(req, multi, p -> push!(progress, p))
             unique!(progress)
