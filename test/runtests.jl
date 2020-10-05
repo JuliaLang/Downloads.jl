@@ -69,8 +69,8 @@ include("setup.jl")
     end
 
     @testset "concurrent requests" begin
-        count = 10
         delay = 2
+        count = 100
         url = "$server/delay/$delay"
         t = @elapsed @sync for id = 1:count
             @async begin
@@ -79,7 +79,7 @@ include("setup.jl")
                 @test get(data["args"], "id", nothing) == ["$id"]
             end
         end
-        @test 2t < count*delay
+        @test t < 0.9*count*delay
     end
 
     @testset "referer" begin
@@ -129,9 +129,12 @@ include("setup.jl")
         end
 
         @testset "progress" begin
-            progress = Downloads.Curl.Progress[]
             # https://httpbingo.org/drip doesn't work
-            req = Request(devnull, "https://httpbin.org/drip", String[])
+            # see https://github.com/mccutchen/go-httpbin/issues/40
+            # fixed, but their deployed setup is still broken
+            url = "https://httpbin.org/drip"
+            progress = Downloads.Curl.Progress[]
+            req = Request(devnull, url, String[])
             Downloads.request(req, multi, p -> push!(progress, p))
             unique!(progress)
             @test 11 ≤ length(progress) ≤ 12
