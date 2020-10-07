@@ -12,19 +12,16 @@ Julia 1.3 through 1.5 as well.
 ## API
 
 ```jl
-download(url, [ path = tempfile() ]; [ headers ]) -> path
-download(url, io; [ headers ]) -> io
+download(url, [ output = tempfile() ]; [ headers ]) -> output
 ```
+* `url     :: AbstractString`
+* `output  :: Union{AbstractString, AbstractCmd, IO}`
+* `headers :: Union{AbstractVector, AbstractDict}`
 
-- `url     :: AbstractString`
-- `path    :: AbstractString`
-- `io      :: IO`
-- `headers :: Union{AbstractVector, AbstractDict}`
-
-Download a file from the given url, saving it to the location `path`, or if not
-specified, a temporary path. Returns the path of the downloaded file. If the
-second argument is an IO handle instead of a path, the body of the downloaded
-URL is written to the handle instead and the handle is returned.
+Download a file from the given url, saving it to `output` or if not specified,
+a temporary path. The `output` can also be an `IO` handle, in which case the
+body of the response is streamed to that handle and the handle is returned. If
+`output` is a command, the command is run and output is sent to it on stdin.
 
 If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when

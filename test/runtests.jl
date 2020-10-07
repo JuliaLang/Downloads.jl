@@ -1,6 +1,39 @@
 include("setup.jl")
 
 @testset "Downloads.jl" begin
+    @testset "API coverage" begin
+        value = "Julia is great!"
+        base64 = "SnVsaWEgaXMgZ3JlYXQh"
+        url = "$server/base64/$base64"
+        headers = ["Foo" => "Bar"]
+        # test with one argument
+        path = Downloads.download(url)
+        @test isfile(path)
+        @test value == read(path, String)
+        rm(path)
+        # with headers
+        path = Downloads.download(url, headers=headers)
+        @test isfile(path)
+        @test value == read(path, String)
+        rm(path)
+        # test with two arguments
+        arg_writers() do path, output
+            @arg_test output begin
+                @test output == Downloads.download(url, output)
+            end
+            @test isfile(path)
+            @test value == read(path, String)
+            rm(path)
+            # with headers
+            @arg_test output begin
+                @test output == Downloads.download(url, output, headers=headers)
+            end
+            @test isfile(path)
+            @test value == read(path, String)
+            rm(path)
+        end
+    end
+
     @testset "get request" begin
         url = "$server/get"
         data = download_json(url)

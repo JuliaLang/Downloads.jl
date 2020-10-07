@@ -1,5 +1,7 @@
 module Downloads
 
+using ArgTools
+
 include("Curl/Curl.jl")
 using .Curl
 
@@ -22,18 +24,16 @@ end
 const Headers = Union{AbstractVector, AbstractDict}
 
 """
-    download(url, [ path = tempfile() ]; [ headers ]) -> path
-    download(url, io; [ headers ]) -> io
+    download(url, [ output = tempfile() ]; [ headers ]) -> output
 
         url     :: AbstractString
-        path    :: AbstractString
-        io      :: IO
+        output  :: Union{AbstractString, AbstractCmd, IO}
         headers :: Union{AbstractVector, AbstractDict}
 
-Download a file from the given url, saving it to the location `path`, or if not
-specified, a temporary path. Returns the path of the downloaded file. If the
-second argument is an IO handle instead of a path, the body of the downloaded
-URL is written to the handle instead and the handle is returned.
+Download a file from the given url, saving it to `output` or if not specified,
+a temporary path. The `output` can also be an `IO` handle, in which case the
+body of the response is streamed to that handle and the handle is returned. If
+`output` is a command, the command is run and output is sent to it on stdin.
 
 If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when
@@ -41,46 +41,32 @@ downloading URLs with protocols that supports them, such as HTTP/S.
 """
 function download(
     url::AbstractString,
-    io::IO;
+    output::Union{ArgWrite, Nothing} = nothing;
     headers::Headers = Pair{String,String}[],
     downloader::Downloader = default_downloader(),
 )
-    easy = Easy()
-    set_url(easy, url)
-    for hdr in headers
-        hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
-            throw(ArgumentError("invalid header: $(repr(hdr))"))
-        add_header(easy, hdr)
-    end
-    add_handle(downloader.multi, easy)
-    for buf in easy.buffers
-        write(io, buf)
-    end
-    remove_handle(downloader.multi, easy)
-    status = get_response_code(easy)
-    status == 200 && return io
-    if easy.code == Curl.CURLE_OK
-        message = get_response_headers(easy)[1]
-    else
-        message = GC.@preserve easy unsafe_string(pointer(easy.errbuf))
-    end
-    error(message)
-end
-
-function download(
-    url::AbstractString,
-    path::AbstractString = tempname(),
-    headers::Headers = Pair{String,String}[],
-    downloader::Downloader = default_downloader(),
-)
-    try open(path, write=true) do io
-            download(url, io, headers = headers, downloader = downloader)
+    arg_write(output) do io
+        easy = Easy()
+        set_url(easy, url)
+        for hdr in headers
+            hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
+                throw(ArgumentError("invalid header: $(repr(hdr))"))
+            add_header(easy, hdr)
         end
-    catch
-        rm(path, force=true)
-        rethrow()
+        add_handle(downloader.multi, easy)
+        for buf in easy.buffers
+            write(io, buf)
+        end
+        remove_handle(downloader.multi, easy)
+        status = get_response_code(easy)
+        status == 200 && return
+        if easy.code == Curl.CURLE_OK
+            message = get_response_headers(easy)[1]
+        else
+            message = GC.@preserve easy unsafe_string(pointer(easy.errbuf))
+        end
+        error(message)
     end
-    return path
 end
 
 ## experimental request API ##
