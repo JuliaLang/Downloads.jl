@@ -1,4 +1,5 @@
 using Test
+using ArgTools
 using Downloads
 using Downloads.Curl
 
