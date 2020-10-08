@@ -45,7 +45,6 @@ function download(
     headers::Headers = Pair{String,String}[],
     downloader::Downloader = default_downloader(),
 )
-    yield() # prevents deadlocks, shouldn't be necessary
     arg_write(output) do io
         easy = Easy()
         set_url(easy, url)
@@ -88,7 +87,6 @@ struct Response
 end
 
 function request(req::Request, multi = Multi(), progress = p -> nothing)
-    yield() # prevents deadlocks, shouldn't be necessary
     easy = Easy()
     set_url(easy, req.url)
     for hdr in req.headers
