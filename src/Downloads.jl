@@ -75,7 +75,7 @@ function download(
     downloader::Downloader = default_downloader(),
 )
     yield() # prevents deadlocks, shouldn't be necessary
-    using_default = downloader === default_downloader()
+    using_default = downloader === DEFAULT_DOWNLOADER[]
     using_default && enter_default_downloader()
     try arg_write(output) do io
         with(Easy()) do easy
