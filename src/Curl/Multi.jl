@@ -1,10 +1,11 @@
 mutable struct Multi
     handle :: Ptr{Cvoid}
     timer  :: Ptr{Cvoid}
+    count  :: Int
 end
 
 function Multi()
-    multi = Multi(C_NULL, C_NULL)
+    multi = Multi(C_NULL, C_NULL, 0)
     init!(multi)
     finalizer(cleanup!, multi)
     return multi
@@ -26,6 +27,7 @@ function cleanup!(multi::Multi)
     curl_multi_cleanup(multi.handle)
     multi.handle = C_NULL
     multi.timer = C_NULL
+    multi.count = 0
     return multi
 end
 

@@ -14,7 +14,6 @@ struct Downloader
     Downloader() = new(Multi())
 end
 
-const DEFAULT_DOWNLOADER_COUNT = Ref(0)
 const DEFAULT_DOWNLOADER_LOCK = ReentrantLock()
 const DEFAULT_DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
@@ -23,30 +22,19 @@ function default_downloader()::Downloader
     DEFAULT_DOWNLOADER[] = Downloader()
 end
 
-function enter_default_downloader()
+function default_downloader_if_zero(f::Function)
     lock(DEFAULT_DOWNLOADER_LOCK) do
-        if DEFAULT_DOWNLOADER_COUNT[] == 0
-            Curl.init!(default_downloader().multi)
-        end
-        DEFAULT_DOWNLOADER_COUNT[] += 1
+        downloader = default_downloader()
+        downloader.multi.count == 0 && f(downloader.multi)
     end
 end
-
-function exit_default_downloader()
-    lock(DEFAULT_DOWNLOADER_LOCK) do
-        DEFAULT_DOWNLOADER_COUNT[] -= 1
-        if DEFAULT_DOWNLOADER_COUNT[] == 0
-            Curl.cleanup!(default_downloader().multi)
-        end
-    end
-end
-
+enter_default_downloader() = default_downloader_if_zero(Curl.init!)
+exit_default_downloader() = default_downloader_if_zero(Curl.cleanup!)
 
 const Headers = Union{AbstractVector, AbstractDict}
 
 function with(f, interface::Union{Multi, Easy})
-    try
-        f(interface)
+    try f(interface)
     finally
         Curl.cleanup!(interface)
     end
