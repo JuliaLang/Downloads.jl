@@ -25,6 +25,7 @@ end
 function default_downloader_if_zero(f::Function)
     lock(DEFAULT_DOWNLOADER_LOCK) do
         downloader = default_downloader()
+        yield() # why is this necessary?
         downloader.multi.count == 0 && f(downloader.multi)
     end
 end
@@ -62,7 +63,6 @@ function download(
     headers::Headers = Pair{String,String}[],
     downloader::Downloader = default_downloader(),
 )
-    yield() # prevents deadlocks, shouldn't be necessary
     using_default = downloader === DEFAULT_DOWNLOADER[]
     using_default && enter_default_downloader()
     try arg_write(output) do io
@@ -111,7 +111,6 @@ struct Response
 end
 
 function request(req::Request, multi = Multi(), progress = p -> nothing)
-    yield() # prevents deadlocks, shouldn't be necessary
     with(Easy()) do easy
         set_url(easy, req.url)
         for hdr in req.headers
