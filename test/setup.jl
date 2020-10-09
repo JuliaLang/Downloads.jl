@@ -83,5 +83,4 @@ function url_escape(str::Union{String, SubString{String}})
 end
 url_escape(str::AbstractString) = url_escape(String(str))
 
-const multi = Multi()
 const server = "https://httpbingo.julialang.org"

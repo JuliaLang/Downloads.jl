@@ -102,6 +102,11 @@ include("setup.jl")
     end
 
     @testset "concurrent requests" begin
+        have_lsof = Sys.which("lsof") !== nothing
+        count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
+        if have_lsof
+            n_tcp = count_tcp()
+        end
         delay = 2
         count = 100
         url = "$server/delay/$delay"
@@ -113,6 +118,9 @@ include("setup.jl")
             end
         end
         @test t < 0.9*count*delay
+        if have_lsof
+            @test n_tcp == count_tcp()
+        end
     end
 
     @testset "referer" begin
@@ -126,6 +134,7 @@ include("setup.jl")
 
     @testset "request API" begin
         @testset "basic request usage" begin
+            multi = Multi()
             for status in (200, 300, 400)
                 url = "$server/status/$status"
                 resp = request_body(multi, url)[1]
@@ -139,6 +148,7 @@ include("setup.jl")
         end
 
         @testset "custom headers" begin
+            multi = Multi()
             url = "$server/response-headers?FooBar=VaLuE"
             resp, data = request_body(multi, url)
             @test resp.url == url
@@ -150,6 +160,7 @@ include("setup.jl")
         end
 
         @testset "url for redirect" begin
+            multi = Multi()
             dest = "$server/headers"
             url = "$server/redirect-to?url=$(url_escape(dest))"
             resp, data = request_json(multi, url)
@@ -162,6 +173,7 @@ include("setup.jl")
         end
 
         @testset "progress" begin
+            multi = Multi()
             # https://httpbingo.org/drip doesn't work
             # see https://github.com/mccutchen/go-httpbin/issues/40
             # fixed, but their deployed setup is still broken
