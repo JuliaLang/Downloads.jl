@@ -3,15 +3,15 @@ mutable struct Multi
     timer  :: Ptr{Cvoid}
 end
 
-function Multi(; init=true)
+function Multi()
     multi = Multi(C_NULL, C_NULL)
-    init && init!(multi)
+    init!(multi)
     finalizer(cleanup!, multi)
     return multi
 end
 
 function init!(multi::Multi)
-    @assert multi.handle == multi.timer == C_NULL
+    multi.handle == C_NULL || return
     timer = jl_malloc(Base._sizeof_uv_timer)
     uv_timer_init(timer)
     multi.timer = timer
@@ -26,7 +26,7 @@ function cleanup!(multi::Multi)
     curl_multi_cleanup(multi.handle)
     multi.handle = C_NULL
     multi.timer = C_NULL
-    return
+    return multi
 end
 
 # libuv callbacks

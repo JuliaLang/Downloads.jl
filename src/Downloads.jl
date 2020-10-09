@@ -11,31 +11,31 @@ export download
 
 struct Downloader
     multi::Multi
-    Downloader(; init=true) = new(Multi(; init=init))
+    Downloader() = new(Multi())
 end
 
-const N_CONCURRENT_DEFAULT_DOWNLOADS = Threads.Atomic{Int}(0)
+const DEFAULT_DOWNLOADER_COUNT = Ref(0)
 const DEFAULT_DOWNLOADER_LOCK = ReentrantLock()
 const DEFAULT_DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
 function default_downloader()::Downloader
     DEFAULT_DOWNLOADER[] isa Downloader && return DEFAULT_DOWNLOADER[]
-    DEFAULT_DOWNLOADER[] = Downloader(; init=false)
+    DEFAULT_DOWNLOADER[] = Downloader()
 end
 
 function enter_default_downloader()
     lock(DEFAULT_DOWNLOADER_LOCK) do
-        if N_CONCURRENT_DEFAULT_DOWNLOADS[] == 0
+        if DEFAULT_DOWNLOADER_COUNT[] == 0
             Curl.init!(default_downloader().multi)
         end
-        N_CONCURRENT_DEFAULT_DOWNLOADS[] += 1
+        DEFAULT_DOWNLOADER_COUNT[] += 1
     end
 end
 
 function exit_default_downloader()
     lock(DEFAULT_DOWNLOADER_LOCK) do
-        N_CONCURRENT_DEFAULT_DOWNLOADS[] -= 1
-        if N_CONCURRENT_DEFAULT_DOWNLOADS[] == 0
+        DEFAULT_DOWNLOADER_COUNT[] -= 1
+        if DEFAULT_DOWNLOADER_COUNT[] == 0
             Curl.cleanup!(default_downloader().multi)
         end
     end
