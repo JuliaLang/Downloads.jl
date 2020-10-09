@@ -1,17 +1,33 @@
 mutable struct Multi
     handle :: Ptr{Cvoid}
     timer  :: Ptr{Cvoid}
+    count  :: Int
 end
 
 function Multi()
+    multi = Multi(C_NULL, C_NULL, 0)
+    init!(multi)
+    finalizer(cleanup!, multi)
+    return multi
+end
+
+function init!(multi::Multi)
+    multi.handle == C_NULL || return
     timer = jl_malloc(Base._sizeof_uv_timer)
     uv_timer_init(timer)
-    multi = Multi(curl_multi_init(), timer)
-    finalizer(multi) do multi
-        uv_close(multi.timer, cglobal(:jl_free))
-        curl_multi_cleanup(multi.handle)
-    end
+    multi.timer = timer
+    multi.handle = curl_multi_init()
     add_callbacks(multi)
+    return multi
+end
+
+function cleanup!(multi::Multi)
+    multi.handle == C_NULL && return
+    uv_close(multi.timer, cglobal(:jl_free))
+    curl_multi_cleanup(multi.handle)
+    multi.handle = C_NULL
+    multi.timer = C_NULL
+    multi.count = 0
     return multi
 end
 

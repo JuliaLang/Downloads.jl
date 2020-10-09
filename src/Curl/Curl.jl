@@ -30,10 +30,12 @@ include("Multi.jl")
 
 function add_handle(multi::Multi, easy::Easy)
     @check curl_multi_add_handle(multi.handle, easy.handle)
+    multi.count += 1
 end
 
 function remove_handle(multi::Multi, easy::Easy)
     @check curl_multi_remove_handle(multi.handle, easy.handle)
+    multi.count -= 1
 end
 
 end # module
