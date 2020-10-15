@@ -87,12 +87,12 @@ end
 # curl callbacks
 
 function timer_callback(
-    handle_p   :: Ptr{Cvoid},
+    multi_h    :: Ptr{Cvoid},
     timeout_ms :: Clong,
     multi_p    :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
-    @assert handle_p == multi.handle
+    @assert multi_h == multi.handle
     if timeout_ms == 0
         @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
         check_multi_info(multi)
@@ -109,10 +109,10 @@ function timer_callback(
 end
 
 function socket_callback(
-    easy      :: Ptr{Cvoid},
+    easy_h    :: Ptr{Cvoid},
     sock      :: curl_socket_t,
     action    :: Cint,
-    multi_p    :: Ptr{Cvoid},
+    multi_p   :: Ptr{Cvoid},
     uv_poll_p :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi

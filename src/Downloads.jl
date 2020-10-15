@@ -34,10 +34,10 @@ exit_default_downloader() = default_downloader_if_zero(Curl.cleanup!)
 
 const Headers = Union{AbstractVector, AbstractDict}
 
-function with(f, interface::Union{Multi, Easy})
-    try f(interface)
+function with(f, handle::Union{Multi, Easy})
+    try f(handle)
     finally
-        Curl.cleanup!(interface)
+        Curl.cleanup!(handle)
     end
 end
 
