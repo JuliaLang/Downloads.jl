@@ -18,6 +18,7 @@ function init!(multi::Multi)
     multi.timer = timer
     multi.handle = curl_multi_init()
     add_callbacks(multi)
+    set_defaults(multi)
     return multi
 end
 
@@ -29,6 +30,12 @@ function cleanup!(multi::Multi)
     multi.timer = C_NULL
     multi.count = 0
     return multi
+end
+
+# multi-socket options
+
+function set_defaults(multi::Multi)
+    # currently no defaults
 end
 
 # libuv callbacks
