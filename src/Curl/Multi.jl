@@ -54,7 +54,7 @@ function check_multi_info(multi::Multi)
             close(easy.progress)
             close(easy.buffers)
         else
-            @async @info("unknown CURL message type", msg = message.msg)
+            @async @error("curl_multi_info_read: unknown message", message)
         end
     end
 end
@@ -99,8 +99,11 @@ function timer_callback(
     elseif timeout_ms > 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
         uv_timer_start(multi.timer, timeout_cb, timeout_ms, 0)
-    else
+    elseif timeout_ms == -1
         uv_timer_stop(multi.timer)
+    else
+        @async @error("timer_callback: invalid timeout value", timeout_ms)
+        return -1
     end
     return 0
 end
