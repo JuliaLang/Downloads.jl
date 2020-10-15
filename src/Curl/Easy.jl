@@ -52,7 +52,7 @@ function set_defaults(easy::Easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_USERAGENT, USER_AGENT)
 
     # tell curl where to find HTTPS certs
-    certs_file = normpath(Sys.BINDIR, "..", "share", "julia", "cert.pem")
+    certs_file = normpath(Sys.BINDIR::String, "..", "share", "julia", "cert.pem")
     @check curl_easy_setopt(easy.handle, CURLOPT_CAINFO, certs_file)
 end
 
