@@ -1,6 +1,7 @@
 module Curl
 
 export
+    with_handle,
     Easy,
         set_url,
         add_header,
@@ -36,6 +37,13 @@ end
 function remove_handle(multi::Multi, easy::Easy)
     @check curl_multi_remove_handle(multi.handle, easy.handle)
     multi.count -= 1
+end
+
+function with_handle(f, handle::Union{Multi, Easy})
+    try f(handle)
+    finally
+        Curl.done!(handle)
+    end
 end
 
 end # module

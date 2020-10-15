@@ -30,16 +30,9 @@ function default_downloader_if_zero(f::Function)
     end
 end
 enter_default_downloader() = default_downloader_if_zero(Curl.init!)
-exit_default_downloader() = default_downloader_if_zero(Curl.cleanup!)
+exit_default_downloader() = default_downloader_if_zero(Curl.done!)
 
 const Headers = Union{AbstractVector, AbstractDict}
-
-function with(f, handle::Union{Multi, Easy})
-    try f(handle)
-    finally
-        Curl.cleanup!(handle)
-    end
-end
 
 """
     download(url, [ output = tempfile() ]; [ headers ]) -> output
@@ -66,7 +59,7 @@ function download(
     using_default = downloader === DEFAULT_DOWNLOADER[]
     using_default && enter_default_downloader()
     try arg_write(output) do io
-        with(Easy()) do easy
+        with_handle(Easy()) do easy
             set_url(easy, url)
             for hdr in headers
                 hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
@@ -114,7 +107,7 @@ struct Response
 end
 
 function request(req::Request, multi = Multi(), progress = p -> nothing)
-    with(Easy()) do easy
+    with_handle(Easy()) do easy
         set_url(easy, req.url)
         for hdr in req.headers
             add_header(easy, hdr)

@@ -7,7 +7,7 @@ end
 function Multi()
     multi = Multi(C_NULL, C_NULL, 0)
     init!(multi)
-    finalizer(cleanup!, multi)
+    finalizer(done!, multi)
     return multi
 end
 
@@ -22,7 +22,7 @@ function init!(multi::Multi)
     return multi
 end
 
-function cleanup!(multi::Multi)
+function done!(multi::Multi)
     multi.handle == C_NULL && return
     uv_close(multi.timer, cglobal(:jl_free))
     curl_multi_cleanup(multi.handle)
