@@ -102,24 +102,31 @@ include("setup.jl")
     end
 
     @testset "concurrent requests" begin
-        have_lsof = Sys.which("lsof") !== nothing
-        count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
-        if have_lsof
-            n_tcp = count_tcp()
-        end
-        delay = 2
-        count = 100
-        url = "$server/delay/$delay"
-        t = @elapsed @sync for id = 1:count
-            @async begin
-                data = download_json("$url?id=$id")
-                @test "args" in keys(data)
-                @test get(data["args"], "id", nothing) == ["$id"]
+        mine = Downloads.Downloader()
+        default = Downloads.default_downloader()
+        for downloader in (default, #= mine=#) # BROKEN for non-default Downloaders!
+            have_lsof = Sys.which("lsof") !== nothing
+            count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
+            if have_lsof
+                n_tcp = count_tcp()
             end
-        end
-        @test t < 0.9*count*delay
-        if have_lsof
-            @test n_tcp == count_tcp()
+            delay = 2
+            count = 100
+            url = "$server/delay/$delay"
+            t = @elapsed @sync for id = 1:count
+                @async begin
+                    data = download_json("$url?id=$id", downloader = downloader)
+                    @test "args" in keys(data)
+                    @test get(data["args"], "id", nothing) == ["$id"]
+                end
+            end
+            if downloader != default
+                Curl.done!(downloader.multi)
+            end
+            @test t < 0.9*count*delay
+            if have_lsof
+                @test n_tcp == count_tcp()
+            end
         end
     end
 

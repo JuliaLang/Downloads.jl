@@ -9,14 +9,22 @@ if VERSION < v"1.5"
     contains(haystack, needle) = occursin(needle, haystack)
 end
 
-function download_body(url::AbstractString; headers = Union{}[])
+function download_body(
+    url::AbstractString;
+    headers = Union{}[],
+    downloader = Downloads.default_downloader(),
+)
     sprint() do io
-        Downloads.download(url, io, headers = headers)
+        Downloads.download(url, io, headers = headers, downloader = downloader)
     end
 end
 
-function download_json(url::AbstractString; headers = Union{}[])
-    json.parse(download_body(url, headers = headers))
+function download_json(
+    url::AbstractString;
+    headers = Union{}[],
+    downloader = Downloads.default_downloader(),
+)
+    json.parse(download_body(url, headers = headers, downloader = downloader))
 end
 
 function request_body(multi::Multi, url::AbstractString; headers = Union{}[])
