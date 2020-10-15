@@ -46,7 +46,7 @@ include("setup.jl")
 
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             for (key, value) in headers
@@ -57,7 +57,7 @@ include("setup.jl")
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test header(headers′, "Accept") == "application/tar"
@@ -65,7 +65,7 @@ include("setup.jl")
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test header(headers′, "Accept") == ""
@@ -73,7 +73,7 @@ include("setup.jl")
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test !("Accept" in keys(headers′))
