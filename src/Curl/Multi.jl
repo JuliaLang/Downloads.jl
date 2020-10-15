@@ -103,9 +103,9 @@ function timer_callback(
     if timeout_ms == 0
         @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
         check_multi_info(multi)
-    elseif timeout_ms > 0
+    elseif timeout_ms >= 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(multi.timer, timeout_cb, timeout_ms, 0)
+        uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)
     elseif timeout_ms == -1
         uv_timer_stop(multi.timer)
     else
@@ -146,6 +146,7 @@ function socket_callback(
         end
     else
         @async @error("socket_callback: unexpected action", action)
+        return -1
     end
     return 0
 end
