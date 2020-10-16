@@ -1,34 +1,64 @@
 mutable struct Multi
+    lock   :: ReentrantLock
     handle :: Ptr{Cvoid}
     timer  :: Ptr{Cvoid}
-    count  :: Int
-end
+    easies :: Vector{Easy}
 
-function Multi()
-    multi = Multi(C_NULL, C_NULL, 0)
-    init!(multi)
-    finalizer(cleanup!, multi)
-    return multi
+    Multi() = new(ReentrantLock(), C_NULL, C_NULL, Easy[])
 end
 
 function init!(multi::Multi)
-    multi.handle == C_NULL || return
-    timer = jl_malloc(Base._sizeof_uv_timer)
-    uv_timer_init(timer)
-    multi.timer = timer
-    multi.handle = curl_multi_init()
-    add_callbacks(multi)
+    lock(multi.lock) do
+        multi.handle != C_NULL && return
+        timer = jl_malloc(Base._sizeof_uv_timer)
+        uv_timer_init(timer)
+        multi.timer = timer
+        multi.handle = curl_multi_init()
+        finalizer(done!, multi)
+        add_callbacks(multi)
+        set_defaults(multi)
+    end
     return multi
 end
 
-function cleanup!(multi::Multi)
-    multi.handle == C_NULL && return
-    uv_close(multi.timer, cglobal(:jl_free))
-    curl_multi_cleanup(multi.handle)
-    multi.handle = C_NULL
-    multi.timer = C_NULL
-    multi.count = 0
-    return multi
+function done!(multi::Multi)
+    lock(multi.lock) do
+        multi.handle == C_NULL && return
+        isempty(multi.easies) ||
+            @error("curl multi-handle with non-empty handle list")
+        uv_close(multi.timer, cglobal(:jl_free))
+        curl_multi_cleanup(multi.handle)
+        multi.handle = C_NULL
+        multi.timer = C_NULL
+    end
+    return
+end
+
+# adding & removing easy handles
+
+function add_handle(multi::Multi, easy::Easy)
+    lock(multi.lock) do
+        multi.handle == C_NULL && init!(multi)
+        isempty(multi.easies) && preserve_handle(multi)
+        push!(multi.easies, easy)
+        @check curl_multi_add_handle(multi.handle, easy.handle)
+    end
+end
+
+function remove_handle(multi::Multi, easy::Easy)
+    lock(multi.lock) do
+        @check curl_multi_remove_handle(multi.handle, easy.handle)
+        deleteat!(multi.easies, findlast(==(easy), multi.easies))
+        !isempty(multi.easies) && return
+        unpreserve_handle(multi)
+        done!(multi)
+    end
+end
+
+# multi-socket options
+
+function set_defaults(multi::Multi)
+    # currently no defaults
 end
 
 # libuv callbacks
@@ -39,6 +69,7 @@ struct CURLMsg
    code :: CURLcode
 end
 
+# should already be locked
 function check_multi_info(multi::Multi)
     while true
         p = curl_multi_info_read(multi.handle, Ref{Cint}())
@@ -54,7 +85,7 @@ function check_multi_info(multi::Multi)
             close(easy.progress)
             close(easy.buffers)
         else
-            @async @info("unknown CURL message type", msg = message.msg)
+            @async @error("curl_multi_info_read: unknown message", message)
         end
     end
 end
@@ -72,44 +103,53 @@ function event_callback(
     flags = 0
     events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
     events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
-    @check curl_multi_socket_action(multi.handle, sock, flags)
-    check_multi_info(multi)
+    lock(multi.lock) do
+        @check curl_multi_socket_action(multi.handle, sock, flags)
+        check_multi_info(multi)
+    end
 end
 
 function timeout_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
     ## TODO: use a member access API
     multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
     multi = unsafe_pointer_to_objref(multi_p)::Multi
-    @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-    check_multi_info(multi)
+    lock(multi.lock) do
+        @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+        check_multi_info(multi)
+    end
 end
 
 # curl callbacks
 
 function timer_callback(
-    handle_p   :: Ptr{Cvoid},
+    multi_h    :: Ptr{Cvoid},
     timeout_ms :: Clong,
     multi_p    :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
-    @assert handle_p == multi.handle
+    @assert multi_h == multi.handle
     if timeout_ms == 0
-        @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-        check_multi_info(multi)
-    elseif timeout_ms > 0
+        lock(multi.lock) do
+            @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+            check_multi_info(multi)
+        end
+    elseif timeout_ms >= 0
         timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(multi.timer, timeout_cb, timeout_ms, 0)
-    else
+        uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)
+    elseif timeout_ms == -1
         uv_timer_stop(multi.timer)
+    else
+        @async @error("timer_callback: invalid timeout value", timeout_ms)
+        return -1
     end
     return 0
 end
 
 function socket_callback(
-    easy      :: Ptr{Cvoid},
+    easy_h    :: Ptr{Cvoid},
     sock      :: curl_socket_t,
     action    :: Cint,
-    multi_p    :: Ptr{Cvoid},
+    multi_p   :: Ptr{Cvoid},
     uv_poll_p :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
@@ -121,7 +161,9 @@ function socket_callback(
             unsafe_store!(convert(Ptr{Ptr{Cvoid}}, uv_poll_p), multi_p)
             sock_p = uv_poll_p + Base._sizeof_uv_poll
             unsafe_store!(convert(Ptr{curl_socket_t}, sock_p), sock)
-            @check curl_multi_assign(multi.handle, sock, uv_poll_p)
+            lock(multi.lock) do
+                @check curl_multi_assign(multi.handle, sock, uv_poll_p)
+            end
         end
         events = 0
         action != CURL_POLL_IN  && (events |= UV_WRITABLE)
@@ -132,10 +174,13 @@ function socket_callback(
         if uv_poll_p != C_NULL
             uv_poll_stop(uv_poll_p)
             uv_close(uv_poll_p, cglobal(:jl_free))
-            @check curl_multi_assign(multi.handle, sock, C_NULL)
+            lock(multi.lock) do
+                @check curl_multi_assign(multi.handle, sock, C_NULL)
+            end
         end
     else
         @async @error("socket_callback: unexpected action", action)
+        return -1
     end
     return 0
 end

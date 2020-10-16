@@ -25,13 +25,13 @@ function Easy()
         typemax(CURLcode),
         zeros(UInt8, CURL_ERROR_SIZE),
     )
-    finalizer(cleanup!, easy)
+    finalizer(done!, easy)
     add_callbacks(easy)
     set_defaults(easy)
     return easy
 end
 
-function cleanup!(easy::Easy)
+function done!(easy::Easy)
     easy.handle == C_NULL && return
     curl_easy_cleanup(easy.handle)
     curl_slist_free_all(easy.req_hdrs)

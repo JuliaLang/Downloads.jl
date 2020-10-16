@@ -82,10 +82,8 @@ end
 
 # additional libcurl methods
 
-import LibCURL: curl_multi_socket_action
-
 function curl_multi_socket_action(multi_handle, s, ev_bitmask)
-    curl_multi_socket_action(multi_handle, s, ev_bitmask, Ref{Cint}())
+    LibCURL.curl_multi_socket_action(multi_handle, s, ev_bitmask, Ref{Cint}())
 end
 
 # curl string list structure

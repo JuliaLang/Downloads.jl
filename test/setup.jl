@@ -9,17 +9,17 @@ if VERSION < v"1.5"
     contains(haystack, needle) = occursin(needle, haystack)
 end
 
-function download_body(url::AbstractString, headers = Union{}[])
+function download_body(url::AbstractString; headers=Union{}[], downloader=nothing)
     sprint() do io
-        Downloads.download(url, io, headers = headers)
+        Downloads.download(url, io, headers=headers, downloader=downloader)
     end
 end
 
-function download_json(url::AbstractString, headers = Union{}[])
-    json.parse(download_body(url, headers))
+function download_json(url::AbstractString; headers=Union{}[], downloader=nothing)
+    json.parse(download_body(url, headers=headers, downloader=downloader))
 end
 
-function request_body(multi::Multi, url::AbstractString, headers = Union{}[])
+function request_body(multi::Multi, url::AbstractString; headers=Union{}[])
     resp = nothing
     body = sprint() do io
         req = Request(io, url, headers)
@@ -28,8 +28,8 @@ function request_body(multi::Multi, url::AbstractString, headers = Union{}[])
     return resp, body
 end
 
-function request_json(multi::Multi, url::AbstractString, headers = Union{}[])
-    resp, body = request_body(multi, url, headers)
+function request_json(multi::Multi, url::AbstractString; headers=Union{}[])
+    resp, body = request_body(multi, url, headers=headers)
     return resp, json.parse(body)
 end
 

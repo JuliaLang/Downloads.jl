@@ -46,7 +46,7 @@ include("setup.jl")
 
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             for (key, value) in headers
@@ -57,7 +57,7 @@ include("setup.jl")
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test header(headers′, "Accept") == "application/tar"
@@ -65,7 +65,7 @@ include("setup.jl")
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test header(headers′, "Accept") == ""
@@ -73,7 +73,7 @@ include("setup.jl")
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
-            data = download_json(url, headers)
+            data = download_json(url, headers = headers)
             @test "headers" in keys(data)
             headers′ = data["headers"]
             @test !("Accept" in keys(headers′))
@@ -102,24 +102,27 @@ include("setup.jl")
     end
 
     @testset "concurrent requests" begin
-        have_lsof = Sys.which("lsof") !== nothing
-        count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
-        if have_lsof
-            n_tcp = count_tcp()
-        end
-        delay = 2
-        count = 100
-        url = "$server/delay/$delay"
-        t = @elapsed @sync for id = 1:count
-            @async begin
-                data = download_json("$url?id=$id")
-                @test "args" in keys(data)
-                @test get(data["args"], "id", nothing) == ["$id"]
+        mine = Downloads.Downloader()
+        for downloader in (nothing, mine)
+            have_lsof = Sys.which("lsof") !== nothing
+            count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
+            if have_lsof
+                n_tcp = count_tcp()
             end
-        end
-        @test t < 0.9*count*delay
-        if have_lsof
-            @test n_tcp == count_tcp()
+            delay = 2
+            count = 100
+            url = "$server/delay/$delay"
+            t = @elapsed @sync for id = 1:count
+                @async begin
+                    data = download_json("$url?id=$id", downloader = downloader)
+                    @test "args" in keys(data)
+                    @test get(data["args"], "id", nothing) == ["$id"]
+                end
+            end
+            @test t < 0.9*count*delay
+            if have_lsof
+                @test n_tcp == count_tcp()
+            end
         end
     end
 
