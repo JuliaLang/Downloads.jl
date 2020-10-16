@@ -3,18 +3,22 @@ mutable struct Multi
     handle :: Ptr{Cvoid}
     timer  :: Ptr{Cvoid}
     easies :: Vector{Easy}
+    grace  :: UInt64
 
-    function Multi()
+    function Multi(grace::Integer = typemax(UInt64))
         timer = jl_malloc(Base._sizeof_uv_timer)
         uv_timer_init(timer)
-        multi = new(ReentrantLock(), C_NULL, timer, Easy[])
+        multi = new(ReentrantLock(), C_NULL, timer, Easy[], grace)
         finalizer(multi) do multi
+            uv_timer_stop(multi.timer)
             uv_close(multi.timer, cglobal(:jl_free))
+            done!(multi)
         end
     end
 end
 
 function init!(multi::Multi)
+    uv_timer_stop(multi.timer)
     multi.handle = curl_multi_init()
     add_callbacks(multi)
     set_defaults(multi)
@@ -27,6 +31,14 @@ function done!(multi::Multi)
 end
 
 # adding & removing easy handles
+
+function cleanup_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
+    ## TODO: use a member access API
+    multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
+    multi = unsafe_pointer_to_objref(multi_p)::Multi
+    done!(multi)
+    return
+end
 
 function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
@@ -42,7 +54,12 @@ function remove_handle(multi::Multi, easy::Easy)
         @check curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies))
         !isempty(multi.easies) && return
-        done!(multi)
+        cleanup_cb = @cfunction(cleanup_callback, Cvoid, (Ptr{Cvoid},))
+        if multi.grace <= 0
+            done!(multi)
+        elseif 0 < multi.grace < typemax(multi.grace)
+            uv_timer_start(multi.timer, cleanup_cb, multi.grace, 0)
+        end
         unpreserve_handle(multi)
     end
 end
