@@ -17,6 +17,8 @@ using LibCURL
 using LibCURL: curl_off_t
 # not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
 
+using Base: preserve_handle, unpreserve_handle
+
 include("utils.jl")
 
 function __init__()
@@ -28,16 +30,6 @@ const USER_AGENT = "$CURL_VERSION julia/$VERSION"
 
 include("Easy.jl")
 include("Multi.jl")
-
-function add_handle(multi::Multi, easy::Easy)
-    @check curl_multi_add_handle(multi.handle, easy.handle)
-    multi.count += 1
-end
-
-function remove_handle(multi::Multi, easy::Easy)
-    @check curl_multi_remove_handle(multi.handle, easy.handle)
-    multi.count -= 1
-end
 
 function with_handle(f, handle::Union{Multi, Easy})
     try f(handle)

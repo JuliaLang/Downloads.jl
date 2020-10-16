@@ -103,8 +103,7 @@ include("setup.jl")
 
     @testset "concurrent requests" begin
         mine = Downloads.Downloader()
-        default = Downloads.default_downloader()
-        for downloader in (default, #= mine=#) # BROKEN for non-default Downloaders!
+        for downloader in (nothing, mine)
             have_lsof = Sys.which("lsof") !== nothing
             count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
             if have_lsof
@@ -119,9 +118,6 @@ include("setup.jl")
                     @test "args" in keys(data)
                     @test get(data["args"], "id", nothing) == ["$id"]
                 end
-            end
-            if downloader != default
-                Curl.done!(downloader.multi)
             end
             @test t < 0.9*count*delay
             if have_lsof

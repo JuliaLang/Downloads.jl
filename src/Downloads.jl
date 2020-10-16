@@ -1,5 +1,6 @@
 module Downloads
 
+using Base.Experimental: @sync
 using ArgTools
 
 include("Curl/Curl.jl")
@@ -11,28 +12,11 @@ export download
 
 struct Downloader
     multi::Multi
-    Downloader() = new(Multi())
 end
+Downloader() = Downloader(Multi())
 
-const DEFAULT_DOWNLOADER_LOCK = ReentrantLock()
-const DEFAULT_DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
-
-function default_downloader()::Downloader
-    DEFAULT_DOWNLOADER[] isa Downloader && return DEFAULT_DOWNLOADER[]
-    DEFAULT_DOWNLOADER[] = Downloader()
-end
-
-function default_downloader_if_zero(f::Function)
-    lock(DEFAULT_DOWNLOADER_LOCK) do
-        downloader = default_downloader()
-        yield() # why is this necessary?
-        downloader.multi.count == 0 && f(downloader.multi)
-    end
-end
-enter_default_downloader() = default_downloader_if_zero(Curl.init!)
-exit_default_downloader() = default_downloader_if_zero(Curl.done!)
-
-const Headers = Union{AbstractVector, AbstractDict}
+const DOWNLOAD_LOCK = ReentrantLock()
+const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
 """
     download(url, [ output = tempfile() ]; [ headers ]) -> output
@@ -53,12 +37,19 @@ downloading URLs with protocols that supports them, such as HTTP/S.
 function download(
     url::AbstractString,
     output::Union{ArgWrite, Nothing} = nothing;
-    headers::Headers = Pair{String,String}[],
-    downloader::Downloader = default_downloader(),
+    headers::Union{AbstractVector, AbstractDict} = Pair{String,String}[],
+    downloader::Union{Downloader, Nothing} = nothing,
 )
-    using_default = downloader === DEFAULT_DOWNLOADER[]
-    using_default && enter_default_downloader()
-    try arg_write(output) do io
+    lock(DOWNLOAD_LOCK) do
+        yield() # let other downloads finish
+        downloader isa Downloader && return
+        while true
+            downloader = DOWNLOADER[]
+            downloader isa Downloader && return
+            DOWNLOADER[] = Downloader()
+        end
+    end
+    arg_write(output) do io
         with_handle(Easy()) do easy
             set_url(easy, url)
             for hdr in headers
@@ -67,10 +58,13 @@ function download(
                 add_header(easy, hdr)
             end
             add_handle(downloader.multi, easy)
-            for buf in easy.buffers
-                write(io, buf)
+            try # ensure handle is removed
+                for buf in easy.buffers
+                    write(io, buf)
+                end
+            finally
+                remove_handle(downloader.multi, easy)
             end
-            remove_handle(downloader.multi, easy)
             status = get_response_code(easy)
             status == 200 && return
             message = if easy.code == Curl.CURLE_OK
@@ -83,9 +77,6 @@ function download(
             message = chomp(message)
             error("$message while downloading $url")
         end
-    end
-    finally
-        using_default && exit_default_downloader()
     end
 end
 
