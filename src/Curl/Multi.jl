@@ -4,42 +4,34 @@ mutable struct Multi
     timer  :: Ptr{Cvoid}
     easies :: Vector{Easy}
 
-    Multi() = new(ReentrantLock(), C_NULL, C_NULL, Easy[])
+    function Multi()
+        timer = jl_malloc(Base._sizeof_uv_timer)
+        uv_timer_init(timer)
+        multi = new(ReentrantLock(), C_NULL, timer, Easy[])
+        finalizer(multi) do multi
+            uv_close(multi.timer, cglobal(:jl_free))
+        end
+    end
 end
 
 function init!(multi::Multi)
-    lock(multi.lock) do
-        multi.handle != C_NULL && return
-        timer = jl_malloc(Base._sizeof_uv_timer)
-        uv_timer_init(timer)
-        multi.timer = timer
-        multi.handle = curl_multi_init()
-        finalizer(done!, multi)
-        add_callbacks(multi)
-        set_defaults(multi)
-    end
-    return multi
+    multi.handle = curl_multi_init()
+    add_callbacks(multi)
+    set_defaults(multi)
 end
 
 function done!(multi::Multi)
-    lock(multi.lock) do
-        multi.handle == C_NULL && return
-        isempty(multi.easies) ||
-            @error("curl multi-handle with non-empty handle list")
-        uv_close(multi.timer, cglobal(:jl_free))
-        curl_multi_cleanup(multi.handle)
-        multi.handle = C_NULL
-        multi.timer = C_NULL
-    end
-    return
+    multi.handle == C_NULL && return
+    curl_multi_cleanup(multi.handle)
+    multi.handle = C_NULL
 end
 
 # adding & removing easy handles
 
 function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
-        multi.handle == C_NULL && init!(multi)
         isempty(multi.easies) && preserve_handle(multi)
+        multi.handle == C_NULL && init!(multi)
         push!(multi.easies, easy)
         @check curl_multi_add_handle(multi.handle, easy.handle)
     end
@@ -50,8 +42,8 @@ function remove_handle(multi::Multi, easy::Easy)
         @check curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies))
         !isempty(multi.easies) && return
-        unpreserve_handle(multi)
         done!(multi)
+        unpreserve_handle(multi)
     end
 end
 
