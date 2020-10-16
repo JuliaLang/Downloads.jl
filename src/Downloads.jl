@@ -39,6 +39,7 @@ function download(
     output::Union{ArgWrite, Nothing} = nothing;
     headers::Union{AbstractVector, AbstractDict} = Pair{String,String}[],
     downloader::Union{Downloader, Nothing} = nothing,
+    progress::Function = p -> nothing,
 )
     lock(DOWNLOAD_LOCK) do
         yield() # let other downloads finish
@@ -52,6 +53,7 @@ function download(
     arg_write(output) do io
         with_handle(Easy()) do easy
             set_url(easy, url)
+            enable_progress(easy, true)
             for hdr in headers
                 hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
                     throw(ArgumentError("invalid header: $(repr(hdr))"))
@@ -59,8 +61,16 @@ function download(
             end
             add_handle(downloader.multi, easy)
             try # ensure handle is removed
-                for buf in easy.buffers
-                    write(io, buf)
+                @sync begin
+                    @async for buf in easy.buffers
+                        write(io, buf)
+                    end
+                    @async for prog in easy.progress
+                        progress(prog)
+                    end
+                    for buf in easy.buffers
+                        write(io, buf)
+                    end
                 end
             finally
                 remove_handle(downloader.multi, easy)
@@ -97,7 +107,7 @@ struct Response
     headers::Vector{Pair{String,String}}
 end
 
-function request(req::Request, multi = Multi(), progress = p -> nothing)
+function request(req::Request, multi = Multi(); progress = p -> nothing)
     with_handle(Easy()) do easy
         set_url(easy, req.url)
         for hdr in req.headers

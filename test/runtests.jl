@@ -176,19 +176,30 @@ include("setup.jl")
         end
 
         @testset "progress" begin
-            multi = Multi()
             # https://httpbingo.org/drip doesn't work
             # see https://github.com/mccutchen/go-httpbin/issues/40
             # fixed, but their deployed setup is still broken
             url = "https://httpbin.org/drip"
-            progress = Downloads.Curl.Progress[]
-            req = Request(devnull, url, String[])
-            Downloads.request(req, multi, p -> push!(progress, p))
-            unique!(progress)
-            @test 11 ≤ length(progress) ≤ 12
-            shift = length(progress) - 10
-            @test all(p.dl_total == (i==1 ? 0 : 10) for (i, p) in enumerate(progress))
-            @test all(p.dl_now   == max(0, i-shift) for (i, p) in enumerate(progress))
+            @testset "request" begin
+                multi = Multi()
+                progress = Downloads.Curl.Progress[]
+                req = Request(devnull, url, String[])
+                Downloads.request(req, multi; progress = p -> push!(progress, p))
+                unique!(progress)
+                @test 11 ≤ length(progress) ≤ 12
+                shift = length(progress) - 10
+                @test all(p.dl_total == (i==1 ? 0 : 10) for (i, p) in enumerate(progress))
+                @test all(p.dl_now   == max(0, i-shift) for (i, p) in enumerate(progress))
+            end
+            @testset "download" begin
+                progress = Downloads.Curl.Progress[]
+                Downloads.download(url; progress = p -> push!(progress, p))
+                unique!(progress)
+                @test 11 ≤ length(progress) ≤ 12
+                shift = length(progress) - 10
+                @test all(p.dl_total == (i==1 ? 0 : 10) for (i, p) in enumerate(progress))
+                @test all(p.dl_now   == max(0, i-shift) for (i, p) in enumerate(progress))
+            end
         end
     end
 end
