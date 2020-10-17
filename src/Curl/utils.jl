@@ -1,5 +1,9 @@
 # basic C stuff
 
+if !@isdefined(contains)
+    contains(haystack, needle) = occursin(needle, haystack)
+end
+
 puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)
 
 jl_malloc(n::Integer) = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), n)

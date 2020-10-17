@@ -10,6 +10,7 @@ export
         get_effective_url,
         get_response_code,
         get_response_headers,
+        get_error_message,
     Multi,
         add_handle,
         remove_handle
