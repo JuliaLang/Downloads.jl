@@ -13,7 +13,12 @@ export download
 struct Downloader
     multi::Multi
 end
-Downloader() = Downloader(Multi())
+Downloader(; grace::Real=30) = Downloader(Multi(grace_ms(grace)))
+
+function grace_ms(grace::Real)
+    grace < 0 && throw(ArgumentError("grace period cannot be negative: $grace"))
+    grace <= typemax(UInt64) ÷ 1000 ? round(UInt64, 1000*grace) : typemax(UInt64)
+end
 
 const DOWNLOAD_LOCK = ReentrantLock()
 const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
