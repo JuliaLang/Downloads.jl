@@ -8,7 +8,7 @@ using .Curl
 
 ## Base download API ##
 
-export download
+export download, with_downloader
 
 struct Downloader
     multi::Multi
@@ -18,6 +18,12 @@ Downloader(; grace::Real=30) = Downloader(Multi(grace_ms(grace)))
 function grace_ms(grace::Real)
     grace < 0 && throw(ArgumentError("grace period cannot be negative: $grace"))
     grace <= typemax(UInt64) ÷ 1000 ? round(UInt64, 1000*grace) : typemax(UInt64)
+end
+
+function with_downloader(body::Function)
+    with_handle(Multi()) do multi
+        body(Downloader(multi))
+    end
 end
 
 const DOWNLOAD_LOCK = ReentrantLock()
