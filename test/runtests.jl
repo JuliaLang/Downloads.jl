@@ -203,3 +203,6 @@ include("setup.jl")
         end
     end
 end
+
+Downloads.DOWNLOADER[] = nothing
+GC.gc(true)
