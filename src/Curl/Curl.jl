@@ -4,6 +4,7 @@ export
     with_handle,
     Easy,
         set_url,
+        set_verbose,
         add_header,
         enable_progress,
         get_effective_url,
