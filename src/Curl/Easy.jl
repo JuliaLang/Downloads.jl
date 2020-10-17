@@ -99,21 +99,28 @@ function get_response_code(easy::Easy)
 end
 
 function get_response_headers(easy::Easy)
+    url = get_effective_url(easy)
+    status = get_response_code(easy)
     headers = Pair{String,String}[]
-    response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
-    for hdr in easy.res_hdrs
-        if occursin(r"^\s*$", hdr)
-            # ignore
-        elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr)) !== nothing
-            response = m.captures[1]
-            empty!(headers)
-        elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr)) !== nothing
-            push!(headers, lowercase(m.captures[1]) => m.captures[2])
-        else
-            url = get_effective_url(easy)
-            status = get_response_code(easy)
-            @warn "malformed HTTP header" url status header=hdr
+    response = ""
+    if contains(url, r"^https?://"i)
+        response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
+        for hdr in easy.res_hdrs
+            if contains(hdr, r"^\s*$")
+                # ignore
+            elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr)) !== nothing
+                response = m.captures[1]
+                empty!(headers)
+            elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr)) !== nothing
+                push!(headers, lowercase(m.captures[1]) => m.captures[2])
+            else
+                @warn "malformed HTTP header" url status header=hdr
+            end
         end
+    elseif contains(url, r"^s?ftps?://"i)
+        response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[end]
+    else
+        # TODO: parse headers of other protocols
     end
     return response, headers
 end
