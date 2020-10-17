@@ -46,7 +46,7 @@ function set_defaults(easy::Easy)
     curl_easy_setopt(easy.handle, CURLOPT_TCP_FASTOPEN, true) # failure ok, unsupported
     @check curl_easy_setopt(easy.handle, CURLOPT_NOSIGNAL, true)
     @check curl_easy_setopt(easy.handle, CURLOPT_FOLLOWLOCATION, true)
-    @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 10)
+    @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 50)
     @check curl_easy_setopt(easy.handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
     @check curl_easy_setopt(easy.handle, CURLOPT_USERAGENT, USER_AGENT)
 
