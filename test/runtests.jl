@@ -32,6 +32,15 @@ include("setup.jl")
             @test value == read(path, String)
             rm(path)
         end
+
+        # not an API test, but a convenient place to test this
+        @testset "follow redirects" begin
+            redirect = "$server/redirect-to?url=$(url_escape(url))"
+            path = Downloads.download(redirect)
+            @test isfile(path)
+            @test value == read(path, String)
+            rm(path)
+        end
     end
 
     @testset "get request" begin
@@ -126,15 +135,6 @@ include("setup.jl")
         end
     end
 
-    @testset "referer" begin
-        dest = "$server/headers"
-        url = "$server/redirect-to?url=$(url_escape(dest))"
-        data = download_json(url)
-        @test "headers" in keys(data)
-        headers′ = data["headers"]
-        @test header(headers′, "Referer") == url
-    end
-
     @testset "request API" begin
         @testset "basic request usage" begin
             multi = Multi()
@@ -164,15 +164,14 @@ include("setup.jl")
 
         @testset "url for redirect" begin
             multi = Multi()
-            dest = "$server/headers"
-            url = "$server/redirect-to?url=$(url_escape(dest))"
-            resp, data = request_json(multi, url)
-            @test resp.url == dest
+            url = "$server/get"
+            redirect = "$server/redirect-to?url=$(url_escape(url))"
+            resp, data = request_json(multi, redirect)
+            @test resp.url == url
             @test resp.status == 200
             test_response_string(resp.response, 200)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
-            @test header(headers′, "Referer") == url
+            @test "url" in keys(data)
+            @test data["url"] == url
         end
 
         @testset "progress" begin
