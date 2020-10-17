@@ -45,6 +45,7 @@ function download(
     headers::Union{AbstractVector, AbstractDict} = Pair{String,String}[],
     downloader::Union{Downloader, Nothing} = nothing,
     progress::Function = p -> nothing,
+    verbose::Bool = false,
 )
     lock(DOWNLOAD_LOCK) do
         yield() # let other downloads finish
@@ -58,6 +59,7 @@ function download(
     arg_write(output) do io
         with_handle(Easy()) do easy
             set_url(easy, url)
+            set_verbose(easy, verbose)
             enable_progress(easy, true)
             for hdr in headers
                 hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||

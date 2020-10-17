@@ -63,6 +63,10 @@ function set_url(easy::Easy, url::Union{String, SubString{String}})
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
+function set_verbose(easy::Easy, verbose::Bool)
+    @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
+end
+
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, hdr) # error checking
