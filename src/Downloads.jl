@@ -83,15 +83,8 @@ function download(
                 remove_handle(downloader.multi, easy)
             end
             status = get_response_code(easy)
-            status == 200 && return
-            message = if easy.code == Curl.CURLE_OK
-                get_response_headers(easy)[1]
-            elseif easy.errbuf[1] == 0
-                unsafe_string(Curl.curl_easy_strerror(easy.code))
-            else
-                GC.@preserve easy unsafe_string(pointer(easy.errbuf))
-            end
-            message = chomp(message)
+            200 ≤ status < 300 && return
+            message = get_error_message(easy)
             error("$message while downloading $url")
         end
     end

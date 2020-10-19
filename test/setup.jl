@@ -2,12 +2,9 @@ using Test
 using ArgTools
 using Downloads
 using Downloads.Curl
+using Downloads.Curl: contains
 
 include("json.jl")
-
-if VERSION < v"1.5"
-    contains(haystack, needle) = occursin(needle, haystack)
-end
 
 function download_body(url::AbstractString; headers=Union{}[], downloader=nothing)
     sprint() do io
