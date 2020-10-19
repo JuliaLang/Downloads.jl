@@ -201,6 +201,14 @@ include("setup.jl")
             end
         end
     end
+
+    @testset "ftp download" begin
+        file = Downloads.download("ftp://xmlsoft.org/libxslt/libxslt-1.1.33.tar.gz")
+        @test isfile(file)
+        @test filesize(file) == 3444093
+        head = String(read!(open(file), Vector{UInt8}(undef, 16)))
+        @test head == "\x1f\x8b\b\0\xa5T.\\\x02\x03\xec]{s۶"
+    end
 end
 
 Downloads.DOWNLOADER[] = nothing
