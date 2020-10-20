@@ -7,26 +7,26 @@ include("setup.jl")
         url = "$server/base64/$base64"
         headers = ["Foo" => "Bar"]
         # test with one argument
-        path = Downloads.download(url)
+        path = download(url)
         @test isfile(path)
         @test value == read(path, String)
         rm(path)
         # with headers
-        path = Downloads.download(url, headers=headers)
+        path = download(url, headers=headers)
         @test isfile(path)
         @test value == read(path, String)
         rm(path)
         # test with two arguments
         arg_writers() do path, output
             @arg_test output begin
-                @test output == Downloads.download(url, output)
+                @test output == download(url, output)
             end
             @test isfile(path)
             @test value == read(path, String)
             rm(path)
             # with headers
             @arg_test output begin
-                @test output == Downloads.download(url, output, headers=headers)
+                @test output == download(url, output, headers=headers)
             end
             @test isfile(path)
             @test value == read(path, String)
@@ -36,7 +36,7 @@ include("setup.jl")
         # not an API test, but a convenient place to test this
         @testset "follow redirects" begin
             redirect = "$server/redirect-to?url=$(url_escape(url))"
-            path = Downloads.download(redirect)
+            path = download(redirect)
             @test isfile(path)
             @test value == read(path, String)
             rm(path)
@@ -90,28 +90,28 @@ include("setup.jl")
     end
 
     @testset "errors" begin
-        @test_throws ArgumentError Downloads.download("ba\0d")
-        @test_throws ArgumentError Downloads.download("good", "ba\0d")
+        @test_throws ArgumentError download("ba\0d")
+        @test_throws ArgumentError download("good", "ba\0d")
 
-        err = @exception Downloads.download("xyz://domain.invalid")
+        err = @exception download("xyz://domain.invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Protocol \"xyz\" not supported")
 
-        err = @exception Downloads.download("https://domain.invalid")
+        err = @exception download("https://domain.invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Could not resolve host")
 
-        err = @exception Downloads.download("$server/status/404")
+        err = @exception download("$server/status/404")
         @test err isa ErrorException
         @test contains(err.msg, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
 
         path = tempname()
-        @test_throws ErrorException Downloads.download("$server/status/404", path)
+        @test_throws ErrorException download("$server/status/404", path)
         @test !ispath(path)
     end
 
     @testset "concurrent requests" begin
-        mine = Downloads.Downloader()
+        mine = Downloader()
         for downloader in (nothing, mine)
             have_lsof = Sys.which("lsof") !== nothing
             count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
@@ -137,13 +137,12 @@ include("setup.jl")
 
     @testset "request API" begin
         @testset "basic request usage" begin
-            multi = Multi()
             for status in (200, 300, 400)
                 url = "$server/status/$status"
-                resp = request_body(multi, url)[1]
+                resp, body = request_body(url)
                 @test resp.url == url
                 @test resp.status == status
-                test_response_string(resp.response, status)
+                test_response_string(resp.message, status)
                 @test all(hdr isa Pair{String,String} for hdr in resp.headers)
                 headers = Dict(resp.headers)
                 @test "content-length" in keys(headers)
@@ -151,49 +150,42 @@ include("setup.jl")
         end
 
         @testset "custom headers" begin
-            multi = Multi()
             url = "$server/response-headers?FooBar=VaLuE"
-            resp, data = request_body(multi, url)
+            resp, body = request_body(url)
             @test resp.url == url
             @test resp.status == 200
-            test_response_string(resp.response, 200)
+            test_response_string(resp.message, 200)
             headers = Dict(resp.headers)
             @test "foobar" in keys(headers)
             @test headers["foobar"] == "VaLuE"
         end
 
         @testset "url for redirect" begin
-            multi = Multi()
             url = "$server/get"
             redirect = "$server/redirect-to?url=$(url_escape(url))"
-            resp, data = request_json(multi, redirect)
+            resp, data = request_json(redirect)
             @test resp.url == url
             @test resp.status == 200
-            test_response_string(resp.response, 200)
+            test_response_string(resp.message, 200)
             @test "url" in keys(data)
             @test data["url"] == url
         end
 
         @testset "progress" begin
-            # https://httpbingo.org/drip doesn't work
-            # see https://github.com/mccutchen/go-httpbin/issues/40
-            # fixed, but their deployed setup is still broken
-            url = "https://httpbin.org/drip"
+            url = "https://httpbingo.org/drip"
             @testset "request" begin
-                multi = Multi()
-                progress = Downloads.Curl.Progress[]
-                req = Request(devnull, url, String[])
-                Downloads.request(req, multi; progress = p -> push!(progress, p))
-                @test progress[1].dl_total == 0
-                @test progress[1].dl_now == 0
-                @test progress[end].dl_total == 10
-                @test progress[end].dl_now == 10
-                @test issorted(p.dl_total for p in progress)
-                @test issorted(p.dl_now for p in progress)
+                progress = NTuple{4,Int}[]
+                request(url; progress = (p...) -> push!(progress, p))
+                @test progress[1][1] == 0
+                @test progress[1][2] == 0
+                @test progress[end][1] == 10
+                @test progress[end][2] == 10
+                @test issorted(p[1] for p in progress)
+                @test issorted(p[2] for p in progress)
             end
             @testset "download" begin
-                progress = Tuple{Int,Int}[]
-                Downloads.download(url; progress = (t, n) -> push!(progress, (t, n)))
+                progress = NTuple{2,Int}[]
+                download(url; progress = (p...) -> push!(progress, p))
                 @test progress[1][1] == 0
                 @test progress[1][2] == 0
                 @test progress[end][1] == 10

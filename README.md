@@ -14,18 +14,20 @@ Julia 1.3 through 1.5 as well.
 ### download
 
 ```jl
-    download(url, [ output = tempfile() ];
-        [ headers = <none>, ]
-        [ progress = <none>, ]
-        [ downloader = <default downloader>, ]
-        [ verbose = false, ]
-    ) -> output
+download(url, [ output = tempfile() ];
+    [ downloader = <default downloader>, ]
+    [ headers = <none>, ]
+    [ method = "GET", ]
+    [ progress = <none>, ]
+    [ verbose = false, ]
+) -> output
 ```
 * `url        :: AbstractString`
 * `output     :: Union{AbstractString, AbstractCmd, IO}`
-* `headers    :: Union{AbstractVector, AbstractDict}`
-* `progress   :: (total::Integer, now::Integer) --> Any`
 * `downloader :: Downloader`
+* `headers    :: Union{AbstractVector, AbstractDict}`
+* `method     :: AbstractString`
+* `progress   :: (total::Integer, now::Integer) --> Any`
 * `verbose    :: Bool`
 
 Download a file from the given url, saving it to `output` or if not specified, a
@@ -33,15 +35,15 @@ temporary path. The `output` can also be an `IO` handle, in which case the body
 of the response is streamed to that handle and the handle is returned. If
 `output` is a command, the command is run and output is sent to it on stdin.
 
-If the `headers` keyword argument is provided, it must be a vector or dictionary
-whose elements are all pairs of strings. These pairs are passed as headers when
-downloading URLs with protocols that supports them, such as HTTP/S.
-
 If the `downloader` keyword argument is provided, it must be a `Downloader`
 object. Resources and connections will be shared between downloads performed by
 the same `Downloader` and cleaned up automatically when the object is garbage
 collected or there have been no downloads performed with it for a grace period.
 See [`Downloader`](@ref) for more info about configuration and usage.
+
+If the `headers` keyword argument is provided, it must be a vector or dictionary
+whose elements are all pairs of strings. These pairs are passed as headers when
+downloading URLs with protocols that supports them, such as HTTP/S.
 
 If the `progress` keyword argument is provided, it must be a callback funtion
 which will be called whenever there are updates about the size and status of the
@@ -54,6 +56,59 @@ well-behaved progress callback should handle a total size of zero gracefully.
 
 If the `verbose` optoin is set to true, `libcurl`, which is used to implement
 the download functionality will print debugging information to `stderr`.
+
+### request
+
+```jl
+request(url;
+    [ output = devnull, ]
+    [ downloader = <default downloader>, ]
+    [ headers = <none>, ]
+    [ method = "GET", ]
+    [ progress = <none>, ]
+    [ verbose = false, ]
+) -> output
+```
+* `url        :: AbstractString`
+* `output     :: Union{AbstractString, AbstractCmd, IO}`
+* `downloader :: Downloader`
+* `headers    :: Union{AbstractVector, AbstractDict}`
+* `method     :: AbstractString`
+* `progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any`
+* `verbose    :: Bool`
+
+Make a request to the given url, returning a [`Response`](@ref) object capturing
+the status, headers and other information about the response. The body of the
+reponse is written to `output` if specified and discarded otherwise.
+
+Other options are the same as for `download` except for `progress` which must be
+a function accepting four integer arguments (rather than two), indicating both
+upload and download progress.
+
+### Response
+
+```jl
+struct Response
+    url     :: String
+    status  :: Int
+    message :: String
+    headers :: Vector{Pair{String,String}}
+end
+```
+
+`Response` is a type capturing the properties the response to a request as an
+object. It has the following fields:
+
+- `url`: the URL that was ultimately requested after following redirects
+- `status`: the status code of the response, indicating success, failure, etc.
+- `message`: a textual message describing the nature of the response
+- `headers`: any headers that were returned with the response
+
+The meaning and availability of some of these responses depends on the protocol
+used for the request. For many protocols, including HTTP/S and S/FTP, a 2xx
+status code indicates a successful response. For responses in protocols that do
+not support headers, the headers vector will be empty. HTTP/2 does not include a
+status message, only a status code, so the message will be empty.
 
 ### Downloader
 

@@ -62,6 +62,13 @@ function set_url(easy::Easy, url::Union{String, SubString{String}})
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
+function set_method(easy::Easy, method::Union{String, SubString{String}})
+    # TODO: ideally, Clang would generate Cstring signatures
+    Base.unsafe_convert(Cstring, method) # error checking
+    @check curl_easy_setopt(easy.handle, CURLOPT_CUSTOMREQUEST, method)
+end
+set_method(easy::Easy, method::AbstractString) = set_method(easy, String(method))
+
 function set_verbose(easy::Easy, verbose::Bool)
     @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
 end
@@ -92,24 +99,24 @@ function get_effective_url(easy::Easy)
     return unsafe_string(url_ref[])
 end
 
-function get_response_code(easy::Easy)
+function get_response_status(easy::Easy)
     code_ref = Ref{Clong}()
     @check curl_easy_getinfo(easy.handle, CURLINFO_RESPONSE_CODE, code_ref)
     return Int(code_ref[])
 end
 
-function get_response_headers(easy::Easy)
+function get_response_info(easy::Easy)
     url = get_effective_url(easy)
-    status = get_response_code(easy)
+    status = get_response_status(easy)
+    message = ""
     headers = Pair{String,String}[]
-    response = ""
     if contains(url, r"^https?://"i)
-        response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
+        message = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
         for hdr in easy.res_hdrs
             if contains(hdr, r"^\s*$")
                 # ignore
             elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr)) !== nothing
-                response = m.captures[1]
+                message = m.captures[1]
                 empty!(headers)
             elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr)) !== nothing
                 push!(headers, lowercase(m.captures[1]) => m.captures[2])
@@ -118,17 +125,18 @@ function get_response_headers(easy::Easy)
             end
         end
     elseif contains(url, r"^s?ftps?://"i)
-        response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[end]
+        message = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[end]
     else
         # TODO: parse headers of other protocols
     end
-    return response, headers
+    message = chomp(message)
+    return url, status, message, headers
 end
 
 function get_error_message(easy::Easy)::String
-    status = get_response_code(easy)
+    status = get_response_status(easy)
     status_re = Regex(status == 0 ? "" : "\\b$status\\b")
-    response = chomp(get_response_headers(easy)[1])
+    response = chomp(get_response_info(easy)[3])
     endswith(response, '.') && (response = chop(response))
 
     easy.code == Curl.CURLE_OK &&

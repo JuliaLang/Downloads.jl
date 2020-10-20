@@ -1,6 +1,7 @@
 using Test
 using ArgTools
 using Downloads
+using Downloads: download
 using Downloads.Curl
 using Downloads.Curl: contains
 
@@ -8,7 +9,7 @@ include("json.jl")
 
 function download_body(url::AbstractString; headers=Union{}[], downloader=nothing)
     sprint() do io
-        Downloads.download(url, io, headers=headers, downloader=downloader)
+        download(url, io, headers=headers, downloader=downloader)
     end
 end
 
@@ -16,17 +17,16 @@ function download_json(url::AbstractString; headers=Union{}[], downloader=nothin
     json.parse(download_body(url, headers=headers, downloader=downloader))
 end
 
-function request_body(multi::Multi, url::AbstractString; headers=Union{}[])
+function request_body(url::AbstractString; headers=Union{}[])
     resp = nothing
-    body = sprint() do io
-        req = Request(io, url, headers)
-        resp = Downloads.request(req, multi)
+    body = sprint() do output
+        resp = request(url, output = output, headers = headers)
     end
     return resp, body
 end
 
-function request_json(multi::Multi, url::AbstractString; headers=Union{}[])
-    resp, body = request_body(multi, url, headers=headers)
+function request_json(url::AbstractString; headers=Union{}[])
+    resp, body = request_body(url, headers=headers)
     return resp, json.parse(body)
 end
 
