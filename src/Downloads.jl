@@ -177,7 +177,7 @@ function request(
         easy.code == Curl.CURLE_OK &&
             return Response(get_response_info(easy)...)
         message = get_error_message(easy)
-        error("$message while downloading $url")
+        error("$message while requesting $url")
     end
 end
 
@@ -190,7 +190,7 @@ function make_request(
     body       :: Function;
     url        :: AbstractString,
     method     :: Union{AbstractString, Nothing} = nothing,
-    output     :: Union{ArgWrite, Nothing},
+    output     :: Union{ArgWrite, Nothing} = devnull,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
     progress   :: Function = (dl_total, dl_now, ul_total, ul_now) -> nothing,
     verbose    :: Bool = false,
@@ -220,11 +220,11 @@ function make_request(
             add_handle(downloader.multi, easy)
             try # ensure handle is removed
                 @sync begin
-                    @async for buf in easy.buffers
+                    @async for buf in easy.output
                         write(io, buf)
                     end
-                    @async for p in easy.progress
-                        progress(p.dl_total, p.dl_now, p.ul_total, p.ul_now)
+                    @async for prog in easy.progress
+                        progress(prog...)
                     end
                 end
             finally

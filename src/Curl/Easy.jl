@@ -1,14 +1,7 @@
-struct Progress
-    dl_total :: Int
-    dl_now   :: Int
-    ul_total :: Int
-    ul_now   :: Int
-end
-
 mutable struct Easy
     handle   :: Ptr{Cvoid}
-    progress :: Channel{Progress}
-    buffers  :: Channel{Vector{UInt8}}
+    output   :: Channel{Vector{UInt8}}
+    progress :: Channel{NTuple{4,Int}}
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
     code     :: CURLcode
@@ -18,8 +11,8 @@ end
 function Easy()
     easy = Easy(
         curl_easy_init(),
-        Channel{Progress}(Inf),
         Channel{Vector{UInt8}}(Inf),
+        Channel{NTuple{4,Int}}(Inf),
         C_NULL,
         String[],
         typemax(CURLcode),
@@ -186,7 +179,7 @@ function write_callback(
     n = size * count
     buf = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    put!(easy.buffers, buf)
+    put!(easy.output, buf)
     return n
 end
 
@@ -198,7 +191,7 @@ function progress_callback(
     ul_now   :: curl_off_t,
 )::Cint
     easy = unsafe_pointer_to_objref(easy_p)::Easy
-    put!(easy.progress, Progress(dl_total, dl_now, ul_total, ul_now))
+    put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
     return 0
 end
 
