@@ -192,14 +192,14 @@ include("setup.jl")
                 @test issorted(p.dl_now for p in progress)
             end
             @testset "download" begin
-                progress = Downloads.Curl.Progress[]
-                Downloads.download(url; progress = p -> push!(progress, p))
-                @test progress[1].dl_total == 0
-                @test progress[1].dl_now == 0
-                @test progress[end].dl_total == 10
-                @test progress[end].dl_now == 10
-                @test issorted(p.dl_total for p in progress)
-                @test issorted(p.dl_now for p in progress)
+                progress = Tuple{Int,Int}[]
+                Downloads.download(url; progress = (t, n) -> push!(progress, (t, n)))
+                @test progress[1][1] == 0
+                @test progress[1][2] == 0
+                @test progress[end][1] == 10
+                @test progress[end][2] == 10
+                @test issorted(p[1] for p in progress)
+                @test issorted(p[2] for p in progress)
             end
         end
     end

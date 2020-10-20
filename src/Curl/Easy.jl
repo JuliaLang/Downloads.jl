@@ -1,8 +1,8 @@
 struct Progress
-    dl_total :: curl_off_t
-    dl_now   :: curl_off_t
-    ul_total :: curl_off_t
-    ul_now   :: curl_off_t
+    dl_total :: Int
+    dl_now   :: Int
+    ul_total :: Int
+    ul_now   :: Int
 end
 
 mutable struct Easy
