@@ -93,11 +93,11 @@ include("setup.jl")
         @test_throws ArgumentError Downloads.download("ba\0d")
         @test_throws ArgumentError Downloads.download("good", "ba\0d")
 
-        err = @exception Downloads.download("xyz://invalid")
+        err = @exception Downloads.download("xyz://domain.invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Protocol \"xyz\" not supported")
 
-        err = @exception Downloads.download("https://invalid")
+        err = @exception Downloads.download("https://domain.invalid")
         @test err isa ErrorException
         @test startswith(err.msg, "Could not resolve host")
 
