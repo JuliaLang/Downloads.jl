@@ -184,20 +184,22 @@ include("setup.jl")
                 progress = Downloads.Curl.Progress[]
                 req = Request(devnull, url, String[])
                 Downloads.request(req, multi; progress = p -> push!(progress, p))
-                unique!(progress)
-                @test 11 ≤ length(progress) ≤ 12
-                shift = length(progress) - 10
-                @test all(p.dl_total == (i==1 ? 0 : 10) for (i, p) in enumerate(progress))
-                @test all(p.dl_now   == max(0, i-shift) for (i, p) in enumerate(progress))
+                @test progress[1].dl_total == 0
+                @test progress[1].dl_now == 0
+                @test progress[end].dl_total == 10
+                @test progress[end].dl_now == 10
+                @test issorted(p.dl_total for p in progress)
+                @test issorted(p.dl_now for p in progress)
             end
             @testset "download" begin
                 progress = Downloads.Curl.Progress[]
                 Downloads.download(url; progress = p -> push!(progress, p))
-                unique!(progress)
-                @test 11 ≤ length(progress) ≤ 12
-                shift = length(progress) - 10
-                @test all(p.dl_total == (i==1 ? 0 : 10) for (i, p) in enumerate(progress))
-                @test all(p.dl_now   == max(0, i-shift) for (i, p) in enumerate(progress))
+                @test progress[1].dl_total == 0
+                @test progress[1].dl_now == 0
+                @test progress[end].dl_total == 10
+                @test progress[end].dl_now == 10
+                @test issorted(p.dl_total for p in progress)
+                @test issorted(p.dl_now for p in progress)
             end
         end
     end
