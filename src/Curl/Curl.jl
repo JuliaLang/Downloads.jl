@@ -10,7 +10,7 @@ export
         get_effective_url,
         get_response_status,
         get_response_info,
-        get_error_message,
+        get_curl_errstr,
     Multi,
         add_handle,
         remove_handle

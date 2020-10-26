@@ -94,19 +94,22 @@ include("setup.jl")
         @test_throws ArgumentError download("good", "ba\0d")
 
         err = @exception download("xyz://domain.invalid")
-        @test err isa ErrorException
-        @test startswith(err.msg, "Protocol \"xyz\" not supported")
+        @test err isa RequestError
+        @test err.code != 0
+        @test startswith(err.message, "Protocol \"xyz\" not supported")
 
         err = @exception download("https://domain.invalid")
-        @test err isa ErrorException
-        @test startswith(err.msg, "Could not resolve host")
+        @test err isa RequestError
+        @test err.code != 0
+        @test startswith(err.message, "Could not resolve host")
 
         err = @exception download("$server/status/404")
-        @test err isa ErrorException
-        @test contains(err.msg, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+        @test err isa RequestError
+        @test err.code == 0 && isempty(err.message)
+        @test contains(err.response.message, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
 
         path = tempname()
-        @test_throws ErrorException download("$server/status/404", path)
+        @test_throws RequestError download("$server/status/404", path)
         @test !ispath(path)
     end
 

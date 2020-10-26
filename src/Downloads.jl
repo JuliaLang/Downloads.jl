@@ -6,9 +6,9 @@ using ArgTools
 include("Curl/Curl.jl")
 using .Curl
 
-## Base download API ##
+export download, request, Downloader, Response, RequestError
 
-export download, request, Downloader, Response
+## Downloader: shared pool of connections ##
 
 """
     Downloader(; [ grace::Real = 30 ])
@@ -32,34 +32,10 @@ function grace_ms(grace::Real)
     grace <= typemax(UInt64) ÷ 1000 ? round(UInt64, 1000*grace) : typemax(UInt64)
 end
 
-"""
-    struct Response
-        url     :: String
-        status  :: Int
-        message :: String
-        headers :: Vector{Pair{String,String}}
-    end
+const DOWNLOAD_LOCK = ReentrantLock()
+const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
-`Response` is a type capturing the properties the response to a request as an
-object. It has the following fields:
-
-- `url`: the URL that was ultimately requested after following redirects
-- `status`: the status code of the response, indicating success, failure, etc.
-- `message`: a textual message describing the nature of the response
-- `headers`: any headers that were returned with the response
-
-The meaning and availability of some of these responses depends on the protocol
-used for the request. For many protocols, including HTTP/S and S/FTP, a 2xx
-status code indicates a successful response. For responses in protocols that do
-not support headers, the headers vector will be empty. HTTP/2 does not include a
-status message, only a status code, so the message will be empty.
-"""
-struct Response
-    url::String
-    status::Int
-    message::String
-    headers::Vector{Pair{String,String}}
-end
+## download API ##
 
 """
     download(url, [ output = tempfile() ];
@@ -114,20 +90,110 @@ function download(
     verbose    :: Bool = false,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
-    make_request(
-        url = url,
-        output = output,
-        method = method,
-        headers = headers,
-        progress = (total, now, _, _) -> progress(total, now),
-        downloader = downloader,
-        verbose = verbose,
-    ) do easy
-        status = get_response_status(easy)
-        200 ≤ status < 300 && return
-        message = get_error_message(easy)
-        error("$message while downloading $url")
+    arg_write(output) do output
+        response = request(
+            url,
+            output = output,
+            method = method,
+            headers = headers,
+            progress = (total, now, _, _) -> progress(total, now),
+            downloader = downloader,
+            verbose = verbose,
+        )
+        response isa Response && 200 ≤ response.status < 300 && return output
+        throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
+end
+
+## request API ##
+
+"""
+    struct Response
+        url     :: String
+        status  :: Int
+        message :: String
+        headers :: Vector{Pair{String,String}}
+    end
+
+`Response` is a type capturing the properties of a successful response to a
+request as an object. It has the following fields:
+
+- `url`: the URL that was ultimately requested after following redirects
+- `status`: the status code of the response, indicating success, failure, etc.
+- `message`: a textual message describing the nature of the response
+- `headers`: any headers that were returned with the response
+
+The meaning and availability of some of these responses depends on the protocol
+used for the request. For many protocols, including HTTP/S and S/FTP, a 2xx
+status code indicates a successful response. For responses in protocols that do
+not support headers, the headers vector will be empty. HTTP/2 does not include a
+status message, only a status code, so the message will be empty.
+"""
+struct Response
+    url     :: String # redirected URL
+    status  :: Int
+    message :: String
+    headers :: Vector{Pair{String,String}}
+end
+
+"""
+    struct RequestError <: ErrorException
+        url      :: String
+        code     :: Int
+        message  :: String
+        response :: Response
+    end
+
+`RequestError` is a type capturing the properties of a failed response to a
+request as an exception object:
+
+- `url`: the original URL that was requested without any redirects
+- `code`: the libcurl error code; `0` if a protocol-only error occurred
+- `message`: the libcurl error message indicating what went wrong
+- `response`: response object capturing what response info is available
+
+The same `RequestError` type is thrown by `download` if the request was
+successful but there was a protocol-level error indicated by a status code
+that is not in the 2xx range, in which case `code` will be zero and the
+`message` field will be the empty string. The `request` API only throws a
+`RequestError` if the libcurl error `code` is non-zero, in which case the
+included `response` object is likely to have a `status` of zero and an
+empty message. There are, however, situations where a curl-level error is
+thrown due to a protocol error, in which case both the inner and outer
+code and message may be of interest.
+"""
+struct RequestError <: Exception
+    url      :: String # original URL
+    code     :: Int
+    message  :: String
+    response :: Response
+end
+
+function error_message(err::RequestError)
+    errstr = err.message
+    status = err.response.status
+    message = err.response.message
+    status_re = Regex(status == 0 ? "" : "\\b$status\\b")
+
+    err.code == Curl.CURLE_OK &&
+        return isempty(message) ? "Error status $status" :
+            contains(message, status_re) ? message :
+                "$message (status $status)"
+
+    isempty(message) && !isempty(errstr) &&
+        return status == 0 ? errstr : "$errstr (status $status)"
+
+    isempty(message) && (message = "Status $status")
+    isempty(errstr)  && (errstr = "curl error $(err.code)")
+
+    !contains(message, status_re) && !contains(errstr, status_re) &&
+        (errstr = "status $status; $errstr")
+
+    return "$message ($errstr)"
+end
+
+function Base.showerror(io::IO, err::RequestError)
+    print(io, "$(error_message(err)) while downloading $(err.url)")
 end
 
 """
@@ -138,7 +204,7 @@ end
         [ progress = <none>, ]
         [ verbose = false, ]
         [ downloader = <default>, ]
-    ) -> output
+    ) -> Union{Response, RequestError}
 
         url        :: AbstractString
         output     :: Union{AbstractString, AbstractCmd, IO}
@@ -163,39 +229,9 @@ function request(
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
     progress   :: Function = (dl_total, dl_now, ul_total, ul_now) -> nothing,
     verbose    :: Bool = false,
+    throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
-) :: Response
-    make_request(
-        url = url,
-        method = method,
-        output = output,
-        headers = headers,
-        progress = progress,
-        downloader = downloader,
-        verbose = verbose,
-    ) do easy
-        easy.code == Curl.CURLE_OK &&
-            return Response(get_response_info(easy)...)
-        message = get_error_message(easy)
-        error("$message while requesting $url")
-    end
-end
-
-## shared internal request functionality ##
-
-const DOWNLOAD_LOCK = ReentrantLock()
-const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
-
-function make_request(
-    body       :: Function;
-    url        :: AbstractString,
-    method     :: Union{AbstractString, Nothing} = nothing,
-    output     :: Union{ArgWrite, Nothing} = devnull,
-    headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
-    progress   :: Function = (dl_total, dl_now, ul_total, ul_now) -> nothing,
-    verbose    :: Bool = false,
-    downloader :: Union{Downloader, Nothing} = nothing,
-)
+) :: Union{Response, RequestError}
     lock(DOWNLOAD_LOCK) do
         yield() # let other downloads finish
         downloader isa Downloader && return
@@ -205,9 +241,10 @@ function make_request(
             DOWNLOADER[] = Downloader()
         end
     end
-    this = nothing
-    that = arg_write(output) do io
+    local response
+    arg_write(output) do output
         with_handle(Easy()) do easy
+            # setup the request
             set_url(easy, url)
             method !== nothing && set_method(easy, method)
             set_verbose(easy, verbose)
@@ -217,11 +254,13 @@ function make_request(
                     throw(ArgumentError("invalid header: $(repr(hdr))"))
                 add_header(easy, hdr)
             end
+
+            # do the request
             add_handle(downloader.multi, easy)
             try # ensure handle is removed
                 @sync begin
                     @async for buf in easy.output
-                        write(io, buf)
+                        write(output, buf)
                     end
                     @async for prog in easy.progress
                         progress(prog...)
@@ -230,10 +269,15 @@ function make_request(
             finally
                 remove_handle(downloader.multi, easy)
             end
-            this = body(easy)
+
+            # return the response or throw an error
+            response = Response(get_response_info(easy)...)
+            easy.code == Curl.CURLE_OK && return response
+            response = RequestError(url, easy.code, get_curl_errstr(easy), response)
+            throw && Base.throw(response)
         end
     end
-    something(this, that)
+    return response
 end
 
 end # module

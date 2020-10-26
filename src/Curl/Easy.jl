@@ -123,35 +123,16 @@ function get_response_info(easy::Easy)
         # TODO: parse headers of other protocols
     end
     message = chomp(message)
+    endswith(message, '.') && (message = chop(message))
     return url, status, message, headers
 end
 
-function get_error_message(easy::Easy)::String
-    status = get_response_status(easy)
-    status_re = Regex(status == 0 ? "" : "\\b$status\\b")
-    response = chomp(get_response_info(easy)[3])
-    endswith(response, '.') && (response = chop(response))
-
-    easy.code == Curl.CURLE_OK &&
-        return isempty(response) ? "Error status $status" :
-            contains(response, status_re) ? response :
-                "$response (status $status)"
-
-    message = easy.errbuf[1] == 0 ?
+function get_curl_errstr(easy::Easy)
+    easy.code == Curl.CURLE_OK && return ""
+    errstr = easy.errbuf[1] == 0 ?
         unsafe_string(Curl.curl_easy_strerror(easy.code)) :
         GC.@preserve easy unsafe_string(pointer(easy.errbuf))
-    message = chomp(message)
-
-    isempty(response) && !isempty(message) &&
-        return status == 0 ? message : "$message (status $status)"
-
-    isempty(response) && (response = "Error status $status")
-    isempty(message)  && (message = "curl error $(easy.code)")
-
-    !contains(response, status_re) && !contains(message, status_re) &&
-        (message = "status $status; $message")
-
-    return "$response ($message)"
+    return chomp(errstr)
 end
 
 # callbacks
