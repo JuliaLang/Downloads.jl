@@ -80,7 +80,15 @@ add_header(easy::Easy, key::AbstractString, val::Nothing) =
     add_header(easy, "$key:")
 add_header(easy::Easy, pair::Pair) = add_header(easy, pair...)
 
-function enable_progress(easy::Easy, on::Bool)
+function add_headers(easy::Easy, headers::Union{AbstractVector, AbstractDict})
+    for hdr in headers
+        hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
+            throw(ArgumentError("invalid header: $(repr(hdr))"))
+        add_header(easy, hdr)
+    end
+end
+
+function enable_progress(easy::Easy, on::Bool=true)
     @check curl_easy_setopt(easy.handle, CURLOPT_NOPROGRESS, !on)
 end
 

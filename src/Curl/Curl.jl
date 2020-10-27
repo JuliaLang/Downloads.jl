@@ -5,7 +5,7 @@ export
     Easy,
         set_url,
         set_verbose,
-        add_header,
+        add_headers,
         enable_progress,
         get_effective_url,
         get_response_status,
