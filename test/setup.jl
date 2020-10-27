@@ -14,20 +14,20 @@ function download_body(url::AbstractString; headers=Union{}[], downloader=nothin
 end
 
 function download_json(url::AbstractString; headers=Union{}[], downloader=nothing)
-    json.parse(download_body(url, headers=headers, downloader=downloader))
+    JSON.parse(download_body(url, headers=headers, downloader=downloader))
 end
 
 function request_body(url::AbstractString; headers=Union{}[])
     resp = nothing
     body = sprint() do output
-        resp = request(url, output = output, headers = headers)
+        resp = request(url, output=output, headers=headers)
     end
     return resp, body
 end
 
 function request_json(url::AbstractString; headers=Union{}[])
     resp, body = request_body(url, headers=headers)
-    return resp, json.parse(body)
+    return resp, JSON.parse(body)
 end
 
 function header(hdrs::Dict, hdr::AbstractString)

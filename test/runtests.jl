@@ -45,9 +45,9 @@ include("setup.jl")
 
     @testset "get request" begin
         url = "$server/get"
-        data = download_json(url)
-        @test "url" in keys(data)
-        @test data["url"] == url
+        json = download_json(url)
+        @test "url" in keys(json)
+        @test json["url"] == url
     end
 
     @testset "headers" begin
@@ -55,9 +55,9 @@ include("setup.jl")
 
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
+            json = download_json(url, headers = headers)
+            @test "headers" in keys(json)
+            headers′ = json["headers"]
             for (key, value) in headers
                 @test header(headers′, key) == value
             end
@@ -66,25 +66,25 @@ include("setup.jl")
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
+            json = download_json(url, headers = headers)
+            @test "headers" in keys(json)
+            headers′ = json["headers"]
             @test header(headers′, "Accept") == "application/tar"
         end
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
+            json = download_json(url, headers = headers)
+            @test "headers" in keys(json)
+            headers′ = json["headers"]
             @test header(headers′, "Accept") == ""
         end
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
+            json = download_json(url, headers = headers)
+            @test "headers" in keys(json)
+            headers′ = json["headers"]
             @test !("Accept" in keys(headers′))
         end
     end
@@ -126,9 +126,9 @@ include("setup.jl")
             url = "$server/delay/$delay"
             t = @elapsed @sync for id = 1:count
                 @async begin
-                    data = download_json("$url?id=$id", downloader = downloader)
-                    @test "args" in keys(data)
-                    @test get(data["args"], "id", nothing) == ["$id"]
+                    json = download_json("$url?id=$id", downloader = downloader)
+                    @test "args" in keys(json)
+                    @test get(json["args"], "id", nothing) == ["$id"]
                 end
             end
             @test t < 0.9*count*delay
@@ -166,12 +166,12 @@ include("setup.jl")
         @testset "url for redirect" begin
             url = "$server/get"
             redirect = "$server/redirect-to?url=$(url_escape(url))"
-            resp, data = request_json(redirect)
+            resp, json = request_json(redirect)
             @test resp.url == url
             @test resp.status == 200
             test_response_string(resp.message, 200)
-            @test "url" in keys(data)
-            @test data["url"] == url
+            @test "url" in keys(json)
+            @test json["url"] == url
         end
 
         @testset "progress" begin
