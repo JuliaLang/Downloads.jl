@@ -90,6 +90,12 @@ function download(
     verbose    :: Bool = false,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
+    if !hasmethod(progress, Tuple{Int,Int}) &&
+        hasmethod(progress, Tuple{Any})
+        original_progress = progress
+        progress = (total, now) ->
+            original_progress((dl_total = total, dl_now = now))
+    end
     arg_write(output) do output
         response = request(
             url,
