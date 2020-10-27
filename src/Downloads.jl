@@ -252,6 +252,7 @@ function request(
         end
     end
     local response
+    input_size = arg_read_size(input)
     arg_read(input) do input
         arg_write(output) do output
             with_handle(Easy()) do easy
@@ -259,6 +260,7 @@ function request(
                 set_url(easy, url)
                 set_verbose(easy, verbose)
                 input !== devnull && enable_upload(easy)
+                input_size !== nothing && set_upload_size(easy, input_size)
                 method !== nothing && set_method(easy, method)
                 add_headers(easy, headers)
                 enable_progress(easy)
@@ -292,5 +294,9 @@ function request(
     end
     return response
 end
+
+arg_read_size(path::AbstractString) = filesize(path)
+arg_read_size(io::IOBuffer) = io.size - io.ptr + 1
+arg_read_size(::Any) = nothing
 
 end # module

@@ -6,6 +6,7 @@ export
         set_url,
         set_method,
         set_verbose,
+        set_upload_size,
         add_headers,
         enable_upload,
         enable_progress,

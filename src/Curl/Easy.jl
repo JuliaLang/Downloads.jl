@@ -72,6 +72,10 @@ function set_verbose(easy::Easy, verbose::Bool)
     @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
 end
 
+function set_upload_size(easy::Easy, size::Integer)
+    @check curl_easy_setopt(easy.handle, CURLOPT_INFILESIZE_LARGE, size)
+end
+
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, hdr) # error checking
