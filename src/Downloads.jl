@@ -253,14 +253,10 @@ function request(
         with_handle(Easy()) do easy
             # setup the request
             set_url(easy, url)
-            method !== nothing && set_method(easy, method)
             set_verbose(easy, verbose)
-            enable_progress(easy, true)
-            for hdr in headers
-                hdr isa Pair{<:AbstractString, <:Union{AbstractString, Nothing}} ||
-                    throw(ArgumentError("invalid header: $(repr(hdr))"))
-                add_header(easy, hdr)
-            end
+            method !== nothing && set_method(easy, method)
+            add_headers(easy, headers)
+            enable_progress(easy)
 
             # do the request
             add_handle(downloader.multi, easy)
@@ -280,7 +276,8 @@ function request(
             # return the response or throw an error
             response = Response(get_response_info(easy)...)
             easy.code == Curl.CURLE_OK && return response
-            response = RequestError(url, easy.code, get_curl_errstr(easy), response)
+            message = get_curl_errstr(easy)
+            response = RequestError(url, easy.code, message, response)
             throw && Base.throw(response)
         end
     end
