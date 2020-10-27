@@ -46,7 +46,6 @@ include("setup.jl")
     @testset "get request" begin
         url = "$server/get"
         json = download_json(url)
-        @test "url" in keys(json)
         @test json["url"] == url
     end
 
@@ -56,36 +55,28 @@ include("setup.jl")
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
             json = download_json(url, headers = headers)
-            @test "headers" in keys(json)
-            headers′ = json["headers"]
             for (key, value) in headers
-                @test header(headers′, key) == value
+                @test header(json["headers"], key) == value
             end
-            @test header(headers′, "Accept") == "*/*"
+            @test header(json["headers"], "Accept") == "*/*"
         end
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
             json = download_json(url, headers = headers)
-            @test "headers" in keys(json)
-            headers′ = json["headers"]
-            @test header(headers′, "Accept") == "application/tar"
+            @test header(json["headers"], "Accept") == "application/tar"
         end
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
             json = download_json(url, headers = headers)
-            @test "headers" in keys(json)
-            headers′ = json["headers"]
-            @test header(headers′, "Accept") == ""
+            @test header(json["headers"], "Accept") == ""
         end
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
             json = download_json(url, headers = headers)
-            @test "headers" in keys(json)
-            headers′ = json["headers"]
-            @test !("Accept" in keys(headers′))
+            @test !("Accept" in keys(json["headers"]))
         end
     end
 
@@ -127,7 +118,6 @@ include("setup.jl")
             t = @elapsed @sync for id = 1:count
                 @async begin
                     json = download_json("$url?id=$id", downloader = downloader)
-                    @test "args" in keys(json)
                     @test get(json["args"], "id", nothing) == ["$id"]
                 end
             end
@@ -159,7 +149,6 @@ include("setup.jl")
             @test resp.status == 200
             test_response_string(resp.message, 200)
             headers = Dict(resp.headers)
-            @test "foobar" in keys(headers)
             @test headers["foobar"] == "VaLuE"
         end
 
@@ -170,7 +159,6 @@ include("setup.jl")
             @test resp.url == url
             @test resp.status == 200
             test_response_string(resp.message, 200)
-            @test "url" in keys(json)
             @test json["url"] == url
         end
 
