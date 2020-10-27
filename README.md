@@ -69,29 +69,39 @@ the download functionality will print debugging information to `stderr`.
 
 ```jl
 request(url;
+    [ input = devnull, ]
     [ output = devnull, ]
-    [ downloader = <default downloader>, ]
-    [ headers = <none>, ]
     [ method = "GET", ]
+    [ headers = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
-) -> output
+    [ throw = true, ]
+    [ downloader = <default>, ]
+) -> Union{Response, RequestError}
 ```
 - `url        :: AbstractString`
+- `input      :: Union{AbstractString, AbstractCmd, IO}`
 - `output     :: Union{AbstractString, AbstractCmd, IO}`
-- `downloader :: Downloader`
-- `headers    :: Union{AbstractVector, AbstractDict}`
 - `method     :: AbstractString`
+- `headers    :: Union{AbstractVector, AbstractDict}`
 - `progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any`
 - `verbose    :: Bool`
+- `throw      :: Bool`
+- `downloader :: Downloader`
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
-reponse is written to `output` if specified and discarded otherwise.
+reponse is written to `output` if specified and discarded otherwise. The
+folowing options differ from the `download` function:
 
-Other options are the same as for `download` except for `progress` which must be
-a function accepting four integer arguments (rather than two), indicating both
-upload and download progress.
+- `input` allows providing a request body; if provided default to PUT request
+- `progress` is a callback taking four integers for upload and download progress
+- `throw` controls whether to throw or return a `RequestError` on request error
+
+Note that unlike `download` which throws an error if the requested URL could not
+be downloaded (indicated by non-2xx status code), `request` returns a `Response`
+object no matter what the status code of the response is. If there is an error
+with getting a response at all, then a `RequestError` is thrown or returned.
 
 ### Response
 
