@@ -11,24 +11,32 @@ Julia 1.3 through 1.5 as well.
 
 ## API
 
+The public API of `Downloads` consists of two functions and three types:
+
+- `download` — download a file from a URL, erroring if it can't be downloaded
+- `request` — request a URL, returning a `Response` object indicating success
+- `Response` — a type capturing the status and other metadata about a request
+- `RequestError` — an error type thrown by `download` and `request` on error
+- `Download` — an object encapsulating shared resources for downloading
+
 ### download
 
 ```jl
 download(url, [ output = tempfile() ];
-    [ downloader = <default downloader>, ]
-    [ headers = <none>, ]
     [ method = "GET", ]
+    [ headers = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
+    [ downloader = <default>, ]
 ) -> output
 ```
-* `url        :: AbstractString`
-* `output     :: Union{AbstractString, AbstractCmd, IO}`
-* `downloader :: Downloader`
-* `headers    :: Union{AbstractVector, AbstractDict}`
-* `method     :: AbstractString`
-* `progress   :: (total::Integer, now::Integer) --> Any`
-* `verbose    :: Bool`
+- `url        :: AbstractString`
+- `output     :: Union{AbstractString, AbstractCmd, IO}`
+- `method     :: AbstractString`
+- `headers    :: Union{AbstractVector, AbstractDict}`
+- `progress   :: (total::Integer, now::Integer) --> Any`
+- `verbose    :: Bool`
+- `downloader :: Downloader`
 
 Download a file from the given url, saving it to `output` or if not specified, a
 temporary path. The `output` can also be an `IO` handle, in which case the body
@@ -69,13 +77,13 @@ request(url;
     [ verbose = false, ]
 ) -> output
 ```
-* `url        :: AbstractString`
-* `output     :: Union{AbstractString, AbstractCmd, IO}`
-* `downloader :: Downloader`
-* `headers    :: Union{AbstractVector, AbstractDict}`
-* `method     :: AbstractString`
-* `progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any`
-* `verbose    :: Bool`
+- `url        :: AbstractString`
+- `output     :: Union{AbstractString, AbstractCmd, IO}`
+- `downloader :: Downloader`
+- `headers    :: Union{AbstractVector, AbstractDict}`
+- `method     :: AbstractString`
+- `progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any`
+- `verbose    :: Bool`
 
 Make a request to the given url, returning a [`Response`](@ref) object capturing
 the status, headers and other information about the response. The body of the
@@ -96,8 +104,8 @@ struct Response
 end
 ```
 
-`Response` is a type capturing the properties the response to a request as an
-object. It has the following fields:
+`Response` is a type capturing the properties of a successful response to a
+request as an object. It has the following fields:
 
 - `url`: the URL that was ultimately requested after following redirects
 - `status`: the status code of the response, indicating success, failure, etc.
@@ -109,6 +117,34 @@ used for the request. For many protocols, including HTTP/S and S/FTP, a 2xx
 status code indicates a successful response. For responses in protocols that do
 not support headers, the headers vector will be empty. HTTP/2 does not include a
 status message, only a status code, so the message will be empty.
+
+### RequestError
+
+```jl
+struct RequestError <: ErrorException
+    url      :: String
+    code     :: Int
+    message  :: String
+    response :: Response
+end
+```
+
+`RequestError` is a type capturing the properties of a failed response to a
+request as an exception object:
+
+- `url`: the original URL that was requested without any redirects
+- `code`: the libcurl error code; `0` if a protocol-only error occurred
+- `message`: the libcurl error message indicating what went wrong
+- `response`: response object capturing what response info is available
+
+The same `RequestError` type is thrown by `download` if the request was
+successful but there was a protocol-level error indicated by a status code that
+is not in the 2xx range, in which case `code` will be zero and the `message`
+field will be the empty string. The `request` API only throws a `RequestError`
+if the libcurl error `code` is non-zero, in which case the included `response`
+object is likely to have a `status` of zero and an empty message. There are,
+however, situations where a curl-level error is thrown due to a protocol error,
+in which case both the inner and outer code and message may be of interest.
 
 ### Downloader
 

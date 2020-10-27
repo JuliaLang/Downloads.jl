@@ -39,8 +39,8 @@ const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
 """
     download(url, [ output = tempfile() ];
-        [ headers = <none>, ]
         [ method = "GET", ]
+        [ headers = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
         [ downloader = <default>, ]
@@ -48,8 +48,8 @@ const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
         url        :: AbstractString
         output     :: Union{AbstractString, AbstractCmd, IO}
-        headers    :: Union{AbstractVector, AbstractDict}
         method     :: AbstractString
+        headers    :: Union{AbstractVector, AbstractDict}
         progress   :: (total::Integer, now::Integer) --> Any
         verbose    :: Bool
         downloader :: Downloader
@@ -97,8 +97,8 @@ function download(
             method = method,
             headers = headers,
             progress = (total, now, _, _) -> progress(total, now),
-            downloader = downloader,
             verbose = verbose,
+            downloader = downloader,
         )
         response isa Response && 200 ≤ response.status < 300 && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
@@ -153,20 +153,23 @@ request as an exception object:
 - `response`: response object capturing what response info is available
 
 The same `RequestError` type is thrown by `download` if the request was
-successful but there was a protocol-level error indicated by a status code
-that is not in the 2xx range, in which case `code` will be zero and the
-`message` field will be the empty string. The `request` API only throws a
-`RequestError` if the libcurl error `code` is non-zero, in which case the
-included `response` object is likely to have a `status` of zero and an
-empty message. There are, however, situations where a curl-level error is
-thrown due to a protocol error, in which case both the inner and outer
-code and message may be of interest.
+successful but there was a protocol-level error indicated by a status code that
+is not in the 2xx range, in which case `code` will be zero and the `message`
+field will be the empty string. The `request` API only throws a `RequestError`
+if the libcurl error `code` is non-zero, in which case the included `response`
+object is likely to have a `status` of zero and an empty message. There are,
+however, situations where a curl-level error is thrown due to a protocol error,
+in which case both the inner and outer code and message may be of interest.
 """
 struct RequestError <: Exception
     url      :: String # original URL
     code     :: Int
     message  :: String
     response :: Response
+end
+
+function Base.showerror(io::IO, err::RequestError)
+    print(io, "$(error_message(err)) while downloading $(err.url)")
 end
 
 function error_message(err::RequestError)
@@ -192,26 +195,24 @@ function error_message(err::RequestError)
     return "$message ($errstr)"
 end
 
-function Base.showerror(io::IO, err::RequestError)
-    print(io, "$(error_message(err)) while downloading $(err.url)")
-end
-
 """
     request(url;
         [ output = devnull, ]
-        [ headers = <none>, ]
         [ method = "GET", ]
+        [ headers = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
+        [ throw = true, ]
         [ downloader = <default>, ]
     ) -> Union{Response, RequestError}
 
         url        :: AbstractString
         output     :: Union{AbstractString, AbstractCmd, IO}
-        headers    :: Union{AbstractVector, AbstractDict}
         method     :: AbstractString
+        headers    :: Union{AbstractVector, AbstractDict}
         progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any
         verbose    :: Bool
+        throw      :: Bool
         downloader :: Downloader
 
 Make a request to the given url, returning a [`Response`](@ref) object capturing
