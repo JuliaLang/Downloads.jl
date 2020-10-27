@@ -196,6 +196,16 @@ include("setup.jl")
                 @test issorted(p[1] for p in progress)
                 @test issorted(p[2] for p in progress)
             end
+            @testset "download (compat)" begin
+                progress = NTuple{2,Int}[]
+                download(url; progress = p -> push!(progress, (p.dl_total, p.dl_now)))
+                @test progress[1][1] == 0
+                @test progress[1][2] == 0
+                @test progress[end][1] == 10
+                @test progress[end][2] == 10
+                @test issorted(p[1] for p in progress)
+                @test issorted(p[2] for p in progress)
+            end
         end
     end
 end
