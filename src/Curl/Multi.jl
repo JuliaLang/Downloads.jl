@@ -93,6 +93,8 @@ function check_multi_info(multi::Multi)
             easy.code = message.code
             close(easy.progress)
             close(easy.output)
+            easy.input = nothing
+            notify(easy.ready)
         else
             @async @error("curl_multi_info_read: unknown message", message)
         end

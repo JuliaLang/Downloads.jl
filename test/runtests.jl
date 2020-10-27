@@ -49,6 +49,22 @@ include("setup.jl")
         @test json["url"] == url
     end
 
+    @testset "put request" begin
+        url = "$server/put"
+        data = "Hello, world!"
+        resp, json = request_json(url, input=IOBuffer(data))
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "post request" begin
+        url = "$server/post"
+        data = "Hello, world!"
+        resp, json = request_json(url, input=IOBuffer(data), method="POST")
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
     @testset "headers" begin
         url = "$server/headers"
 
@@ -89,7 +105,17 @@ include("setup.jl")
         @test err.code != 0
         @test startswith(err.message, "Protocol \"xyz\" not supported")
 
+        err = @exception request("xyz://domain.invalid", input = IOBuffer("Hi"))
+        @test err isa RequestError
+        @test err.code != 0
+        @test startswith(err.message, "Protocol \"xyz\" not supported")
+
         err = @exception download("https://domain.invalid")
+        @test err isa RequestError
+        @test err.code != 0
+        @test startswith(err.message, "Could not resolve host")
+
+        err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
@@ -97,7 +123,13 @@ include("setup.jl")
         err = @exception download("$server/status/404")
         @test err isa RequestError
         @test err.code == 0 && isempty(err.message)
+        @test err.response.status == 404
         @test contains(err.response.message, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+
+        resp = request("$server/get", input = IOBuffer("Hi"))
+        @test resp isa Response
+        @test resp.status == 405
+        @test contains(resp.message, r"^HTTP/\d+(?:\.\d+)?\s+405\b")
 
         path = tempname()
         @test_throws RequestError download("$server/status/404", path)

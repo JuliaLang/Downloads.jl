@@ -1,5 +1,7 @@
 mutable struct Easy
     handle   :: Ptr{Cvoid}
+    input    :: Union{Vector{UInt8},Nothing}
+    ready    :: Threads.Event
     output   :: Channel{Vector{UInt8}}
     progress :: Channel{NTuple{4,Int}}
     req_hdrs :: Ptr{curl_slist_t}
@@ -8,9 +10,13 @@ mutable struct Easy
     errbuf   :: Vector{UInt8}
 end
 
+const EMPTY_BYTE_VECTOR = UInt8[]
+
 function Easy()
     easy = Easy(
         curl_easy_init(),
+        EMPTY_BYTE_VECTOR,
+        Threads.Event(),
         Channel{Vector{UInt8}}(Inf),
         Channel{NTuple{4,Int}}(Inf),
         C_NULL,
@@ -92,6 +98,11 @@ function enable_progress(easy::Easy, on::Bool=true)
     @check curl_easy_setopt(easy.handle, CURLOPT_NOPROGRESS, !on)
 end
 
+function enable_upload(easy::Easy)
+    add_upload_callbacks(easy::Easy)
+    @check curl_easy_setopt(easy.handle, CURLOPT_UPLOAD, true)
+end
+
 # response info
 
 function get_effective_url(easy::Easy)
@@ -158,6 +169,41 @@ function header_callback(
     return n
 end
 
+# feed data to read_callback
+function upload_data(easy::Easy, input::IO)
+    while true
+        data = eof(input) ? nothing : readavailable(input)
+        easy.input === nothing && break
+        easy.input = data
+        curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
+        wait(easy.ready)
+        easy.input === nothing && break
+        easy.ready = Threads.Event()
+    end
+end
+
+function read_callback(
+    data   :: Ptr{Cchar},
+    size   :: Csize_t,
+    count  :: Csize_t,
+    easy_p :: Ptr{Cvoid},
+)::Csize_t
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    buf = easy.input
+    if buf === nothing
+        notify(easy.ready)
+        return 0 # done uploading
+    end
+    if isempty(buf)
+        notify(easy.ready)
+        return CURL_READFUNC_PAUSE # wait for more data
+    end
+    n = min(size * count, length(buf))
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), data, buf, n)
+    deleteat!(buf, 1:n)
+    return n
+end
+
 function write_callback(
     data   :: Ptr{Cchar},
     size   :: Csize_t,
@@ -210,4 +256,15 @@ function add_callbacks(easy::Easy)
         Cint, (Ptr{Cvoid}, curl_off_t, curl_off_t, curl_off_t, curl_off_t))
     @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFOFUNCTION, progress_cb)
     @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFODATA, easy_p)
+end
+
+function add_upload_callbacks(easy::Easy)
+    # pointer to easy object
+    easy_p = pointer_from_objref(easy)
+
+    # set read callback
+    read_cb = @cfunction(read_callback,
+        Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
+    @check curl_easy_setopt(easy.handle, CURLOPT_READFUNCTION, read_cb)
+    @check curl_easy_setopt(easy.handle, CURLOPT_READDATA, easy_p)
 end

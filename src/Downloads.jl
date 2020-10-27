@@ -175,7 +175,7 @@ struct RequestError <: Exception
 end
 
 function Base.showerror(io::IO, err::RequestError)
-    print(io, "$(error_message(err)) while downloading $(err.url)")
+    print(io, "$(error_message(err)) while requesting $(err.url)")
 end
 
 function error_message(err::RequestError)
@@ -203,6 +203,7 @@ end
 
 """
     request(url;
+        [ input = devnull, ]
         [ output = devnull, ]
         [ method = "GET", ]
         [ headers = <none>, ]
@@ -213,6 +214,7 @@ end
     ) -> Union{Response, RequestError}
 
         url        :: AbstractString
+        input      :: Union{AbstractString, AbstractCmd, IO}
         output     :: Union{AbstractString, AbstractCmd, IO}
         method     :: AbstractString
         headers    :: Union{AbstractVector, AbstractDict}
@@ -231,8 +233,9 @@ upload and download progress.
 """
 function request(
     url        :: AbstractString;
-    method     :: Union{AbstractString, Nothing} = nothing,
+    input      :: ArgRead = devnull,
     output     :: ArgWrite = devnull,
+    method     :: Union{AbstractString, Nothing} = nothing,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
     progress   :: Function = (dl_total, dl_now, ul_total, ul_now) -> nothing,
     verbose    :: Bool = false,
@@ -249,36 +252,42 @@ function request(
         end
     end
     local response
-    arg_write(output) do output
-        with_handle(Easy()) do easy
-            # setup the request
-            set_url(easy, url)
-            set_verbose(easy, verbose)
-            method !== nothing && set_method(easy, method)
-            add_headers(easy, headers)
-            enable_progress(easy)
+    arg_read(input) do input
+        arg_write(output) do output
+            with_handle(Easy()) do easy
+                # setup the request
+                set_url(easy, url)
+                set_verbose(easy, verbose)
+                input !== devnull && enable_upload(easy)
+                method !== nothing && set_method(easy, method)
+                add_headers(easy, headers)
+                enable_progress(easy)
 
-            # do the request
-            add_handle(downloader.multi, easy)
-            try # ensure handle is removed
-                @sync begin
-                    @async for buf in easy.output
-                        write(output, buf)
+                # do the request
+                add_handle(downloader.multi, easy)
+                try # ensure handle is removed
+                    @sync begin
+                        @async for buf in easy.output
+                            write(output, buf)
+                        end
+                        @async for prog in easy.progress
+                            progress(prog...)
+                        end
+                        if input !== devnull
+                            @async upload_data(easy, input)
+                        end
                     end
-                    @async for prog in easy.progress
-                        progress(prog...)
-                    end
+                finally
+                    remove_handle(downloader.multi, easy)
                 end
-            finally
-                remove_handle(downloader.multi, easy)
-            end
 
-            # return the response or throw an error
-            response = Response(get_response_info(easy)...)
-            easy.code == Curl.CURLE_OK && return response
-            message = get_curl_errstr(easy)
-            response = RequestError(url, easy.code, message, response)
-            throw && Base.throw(response)
+                # return the response or throw an error
+                response = Response(get_response_info(easy)...)
+                easy.code == Curl.CURLE_OK && return response
+                message = get_curl_errstr(easy)
+                response = RequestError(url, easy.code, message, response)
+                throw && Base.throw(response)
+            end
         end
     end
     return response
