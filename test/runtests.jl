@@ -45,9 +45,69 @@ include("setup.jl")
 
     @testset "get request" begin
         url = "$server/get"
-        data = download_json(url)
-        @test "url" in keys(data)
-        @test data["url"] == url
+        json = download_json(url)
+        @test json["url"] == url
+    end
+
+    @testset "put request" begin
+        url = "$server/put"
+        data = "Hello, world!"
+        resp, json = request_json(url, input=IOBuffer(data))
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "post request" begin
+        url = "$server/post"
+        data = "Hello, world!"
+        resp, json = request_json(url, input=IOBuffer(data), method="POST")
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "put from file" begin
+        url = "$server/put"
+        file = tempname()
+        write(file, "Hello, world!")
+        resp, json = request_json(url, input=file)
+        @test json["url"] == url
+        @test json["data"] == read(file, String)
+        rm(file)
+    end
+
+    @testset "redirected get" begin
+        url = "$server/get"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        json = download_json(url)
+        @test json["url"] == url
+    end
+
+    @testset "redirected put" begin
+        url = "$server/put"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        data = "Hello, world!"
+        resp, json = request_json(redirect, input=IOBuffer(data))
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "redirected post" begin
+        url = "$server/post"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        data = "Hello, world!"
+        resp, json = request_json(redirect, input=IOBuffer(data), method="POST")
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "redirected put from file" begin
+        url = "$server/put"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        file = tempname()
+        write(file, "Hello, world!")
+        resp, json = request_json(redirect, input=file)
+        @test json["url"] == url
+        @test json["data"] == read(file, String)
     end
 
     @testset "headers" begin
@@ -55,37 +115,29 @@ include("setup.jl")
 
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
+            json = download_json(url, headers = headers)
             for (key, value) in headers
-                @test header(headers′, key) == value
+                @test header(json["headers"], key) == value
             end
-            @test header(headers′, "Accept") == "*/*"
+            @test header(json["headers"], "Accept") == "*/*"
         end
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
-            @test header(headers′, "Accept") == "application/tar"
+            json = download_json(url, headers = headers)
+            @test header(json["headers"], "Accept") == "application/tar"
         end
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
-            @test header(headers′, "Accept") == ""
+            json = download_json(url, headers = headers)
+            @test header(json["headers"], "Accept") == ""
         end
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
-            data = download_json(url, headers = headers)
-            @test "headers" in keys(data)
-            headers′ = data["headers"]
-            @test !("Accept" in keys(headers′))
+            json = download_json(url, headers = headers)
+            @test !("Accept" in keys(json["headers"]))
         end
     end
 
@@ -98,7 +150,17 @@ include("setup.jl")
         @test err.code != 0
         @test startswith(err.message, "Protocol \"xyz\" not supported")
 
+        err = @exception request("xyz://domain.invalid", input = IOBuffer("Hi"))
+        @test err isa RequestError
+        @test err.code != 0
+        @test startswith(err.message, "Protocol \"xyz\" not supported")
+
         err = @exception download("https://domain.invalid")
+        @test err isa RequestError
+        @test err.code != 0
+        @test startswith(err.message, "Could not resolve host")
+
+        err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
@@ -106,7 +168,13 @@ include("setup.jl")
         err = @exception download("$server/status/404")
         @test err isa RequestError
         @test err.code == 0 && isempty(err.message)
+        @test err.response.status == 404
         @test contains(err.response.message, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+
+        resp = request("$server/get", input = IOBuffer("Hi"))
+        @test resp isa Response
+        @test resp.status == 405
+        @test contains(resp.message, r"^HTTP/\d+(?:\.\d+)?\s+405\b")
 
         path = tempname()
         @test_throws RequestError download("$server/status/404", path)
@@ -126,9 +194,8 @@ include("setup.jl")
             url = "$server/delay/$delay"
             t = @elapsed @sync for id = 1:count
                 @async begin
-                    data = download_json("$url?id=$id", downloader = downloader)
-                    @test "args" in keys(data)
-                    @test get(data["args"], "id", nothing) == ["$id"]
+                    json = download_json("$url?id=$id", downloader = downloader)
+                    @test get(json["args"], "id", nothing) == ["$id"]
                 end
             end
             @test t < 0.9*count*delay
@@ -159,19 +226,17 @@ include("setup.jl")
             @test resp.status == 200
             test_response_string(resp.message, 200)
             headers = Dict(resp.headers)
-            @test "foobar" in keys(headers)
             @test headers["foobar"] == "VaLuE"
         end
 
         @testset "url for redirect" begin
             url = "$server/get"
             redirect = "$server/redirect-to?url=$(url_escape(url))"
-            resp, data = request_json(redirect)
+            resp, json = request_json(redirect)
             @test resp.url == url
             @test resp.status == 200
             test_response_string(resp.message, 200)
-            @test "url" in keys(data)
-            @test data["url"] == url
+            @test json["url"] == url
         end
 
         @testset "progress" begin

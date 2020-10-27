@@ -1,4 +1,4 @@
-module json
+module JSON
 
 using Base: peek # not exported until Julia 1.5
 

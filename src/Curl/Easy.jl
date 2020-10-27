@@ -1,5 +1,8 @@
 mutable struct Easy
     handle   :: Ptr{Cvoid}
+    input    :: Union{Vector{UInt8},Nothing}
+    ready    :: Threads.Event
+    seeker   :: Union{Function,Nothing}
     output   :: Channel{Vector{UInt8}}
     progress :: Channel{NTuple{4,Int}}
     req_hdrs :: Ptr{curl_slist_t}
@@ -8,9 +11,14 @@ mutable struct Easy
     errbuf   :: Vector{UInt8}
 end
 
+const EMPTY_BYTE_VECTOR = UInt8[]
+
 function Easy()
     easy = Easy(
         curl_easy_init(),
+        EMPTY_BYTE_VECTOR,
+        Threads.Event(),
+        nothing,
         Channel{Vector{UInt8}}(Inf),
         Channel{NTuple{4,Int}}(Inf),
         C_NULL,
@@ -66,6 +74,15 @@ function set_verbose(easy::Easy, verbose::Bool)
     @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
 end
 
+function set_upload_size(easy::Easy, size::Integer)
+    @check curl_easy_setopt(easy.handle, CURLOPT_INFILESIZE_LARGE, size)
+end
+
+function set_seeker(seeker::Function, easy::Easy)
+    add_seek_callbacks(easy)
+    easy.seeker = seeker
+end
+
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, hdr) # error checking
@@ -90,6 +107,11 @@ end
 
 function enable_progress(easy::Easy, on::Bool=true)
     @check curl_easy_setopt(easy.handle, CURLOPT_NOPROGRESS, !on)
+end
+
+function enable_upload(easy::Easy)
+    add_upload_callbacks(easy::Easy)
+    @check curl_easy_setopt(easy.handle, CURLOPT_UPLOAD, true)
 end
 
 # response info
@@ -158,6 +180,60 @@ function header_callback(
     return n
 end
 
+# feed data to read_callback
+function upload_data(easy::Easy, input::IO)
+    while true
+        data = eof(input) ? nothing : readavailable(input)
+        easy.input === nothing && break
+        easy.input = data
+        curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
+        wait(easy.ready)
+        easy.input === nothing && break
+        easy.ready = Threads.Event()
+    end
+end
+
+function read_callback(
+    data   :: Ptr{Cchar},
+    size   :: Csize_t,
+    count  :: Csize_t,
+    easy_p :: Ptr{Cvoid},
+)::Csize_t
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    buf = easy.input
+    if buf === nothing
+        notify(easy.ready)
+        return 0 # done uploading
+    end
+    if isempty(buf)
+        notify(easy.ready)
+        return CURL_READFUNC_PAUSE # wait for more data
+    end
+    n = min(size * count, length(buf))
+    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), data, buf, n)
+    deleteat!(buf, 1:n)
+    return n
+end
+
+function seek_callback(
+    easy_p :: Ptr{Cvoid},
+    offset :: curl_off_t,
+    origin :: Cint,
+)::Cint
+    if origin != 0
+        @async @error("seek_callback: unsupported seek origin", origin)
+        return CURL_SEEKFUNC_CANTSEEK
+    end
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
+    try easy.seeker(offset)
+    catch err
+        @async @error("seek_callback: seeker failed", err)
+        return CURL_SEEKFUNC_FAIL
+    end
+    return CURL_SEEKFUNC_OK
+end
+
 function write_callback(
     data   :: Ptr{Cchar},
     size   :: Csize_t,
@@ -210,4 +286,26 @@ function add_callbacks(easy::Easy)
         Cint, (Ptr{Cvoid}, curl_off_t, curl_off_t, curl_off_t, curl_off_t))
     @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFOFUNCTION, progress_cb)
     @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFODATA, easy_p)
+end
+
+function add_upload_callbacks(easy::Easy)
+    # pointer to easy object
+    easy_p = pointer_from_objref(easy)
+
+    # set read callback
+    read_cb = @cfunction(read_callback,
+        Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
+    @check curl_easy_setopt(easy.handle, CURLOPT_READFUNCTION, read_cb)
+    @check curl_easy_setopt(easy.handle, CURLOPT_READDATA, easy_p)
+end
+
+function add_seek_callbacks(easy::Easy)
+    # pointer to easy object
+    easy_p = pointer_from_objref(easy)
+
+    # set read callback
+    seek_cb = @cfunction(seek_callback,
+        Cint, (Ptr{Cvoid}, curl_off_t, Cint))
+    @check curl_easy_setopt(easy.handle, CURLOPT_SEEKFUNCTION, seek_cb)
+    @check curl_easy_setopt(easy.handle, CURLOPT_SEEKDATA, easy_p)
 end
