@@ -2,6 +2,7 @@ mutable struct Easy
     handle   :: Ptr{Cvoid}
     input    :: Union{Vector{UInt8},Nothing}
     ready    :: Threads.Event
+    seeker   :: Union{Function,Nothing}
     output   :: Channel{Vector{UInt8}}
     progress :: Channel{NTuple{4,Int}}
     req_hdrs :: Ptr{curl_slist_t}
@@ -17,6 +18,7 @@ function Easy()
         curl_easy_init(),
         EMPTY_BYTE_VECTOR,
         Threads.Event(),
+        nothing,
         Channel{Vector{UInt8}}(Inf),
         Channel{NTuple{4,Int}}(Inf),
         C_NULL,
@@ -74,6 +76,11 @@ end
 
 function set_upload_size(easy::Easy, size::Integer)
     @check curl_easy_setopt(easy.handle, CURLOPT_INFILESIZE_LARGE, size)
+end
+
+function set_seeker(seeker::Function, easy::Easy)
+    add_seek_callbacks(easy)
+    easy.seeker = seeker
 end
 
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
@@ -208,6 +215,25 @@ function read_callback(
     return n
 end
 
+function seek_callback(
+    easy_p :: Ptr{Cvoid},
+    offset :: curl_off_t,
+    origin :: Cint,
+)::Cint
+    if origin != 0
+        @async @error("seek_callback: unsupported seek origin", origin)
+        return CURL_SEEKFUNC_CANTSEEK
+    end
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
+    try easy.seeker(offset)
+    catch err
+        @async @error("seek_callback: seeker failed", err)
+        return CURL_SEEKFUNC_FAIL
+    end
+    return CURL_SEEKFUNC_OK
+end
+
 function write_callback(
     data   :: Ptr{Cchar},
     size   :: Csize_t,
@@ -271,4 +297,15 @@ function add_upload_callbacks(easy::Easy)
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
     @check curl_easy_setopt(easy.handle, CURLOPT_READFUNCTION, read_cb)
     @check curl_easy_setopt(easy.handle, CURLOPT_READDATA, easy_p)
+end
+
+function add_seek_callbacks(easy::Easy)
+    # pointer to easy object
+    easy_p = pointer_from_objref(easy)
+
+    # set read callback
+    seek_cb = @cfunction(seek_callback,
+        Cint, (Ptr{Cvoid}, curl_off_t, Cint))
+    @check curl_easy_setopt(easy.handle, CURLOPT_SEEKFUNCTION, seek_cb)
+    @check curl_easy_setopt(easy.handle, CURLOPT_SEEKDATA, easy_p)
 end

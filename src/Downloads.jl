@@ -259,8 +259,17 @@ function request(
                 # setup the request
                 set_url(easy, url)
                 set_verbose(easy, verbose)
-                input !== devnull && enable_upload(easy)
-                input_size !== nothing && set_upload_size(easy, input_size)
+                if input !== devnull
+                    enable_upload(easy)
+                    if input_size !== nothing
+                        set_upload_size(easy, input_size)
+                    end
+                    if applicable(seek, input, 0)
+                        set_seeker(easy) do offset
+                            seek(input, Int(offset))
+                        end
+                    end
+                end
                 method !== nothing && set_method(easy, method)
                 add_headers(easy, headers)
                 enable_progress(easy)

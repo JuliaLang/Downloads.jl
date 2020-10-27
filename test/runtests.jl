@@ -65,6 +65,51 @@ include("setup.jl")
         @test json["data"] == data
     end
 
+    @testset "put from file" begin
+        url = "$server/put"
+        file = tempname()
+        write(file, "Hello, world!")
+        resp, json = request_json(url, input=file)
+        @test json["url"] == url
+        @test json["data"] == read(file, String)
+        rm(file)
+    end
+
+    @testset "redirected get" begin
+        url = "$server/get"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        json = download_json(url)
+        @test json["url"] == url
+    end
+
+    @testset "redirected put" begin
+        url = "$server/put"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        data = "Hello, world!"
+        resp, json = request_json(redirect, input=IOBuffer(data))
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "redirected post" begin
+        url = "$server/post"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        data = "Hello, world!"
+        resp, json = request_json(redirect, input=IOBuffer(data), method="POST")
+        @test json["url"] == url
+        @test json["data"] == data
+    end
+
+    @testset "redirected put from file" begin
+        url = "$server/put"
+        redirect = "$server/redirect-to?url=$(url_escape(url))"
+        file = tempname()
+        write(file, "Hello, world!")
+        resp, json = request_json(redirect, input=file)
+        @test json["url"] == url
+        @test json["data"] == read(file, String)
+    end
+
     @testset "headers" begin
         url = "$server/headers"
 

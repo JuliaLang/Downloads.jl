@@ -7,6 +7,7 @@ export
         set_method,
         set_verbose,
         set_upload_size,
+        set_seeker,
         add_headers,
         enable_upload,
         enable_progress,
