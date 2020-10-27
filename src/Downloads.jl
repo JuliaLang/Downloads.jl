@@ -63,7 +63,7 @@ If the `downloader` keyword argument is provided, it must be a `Downloader`
 object. Resources and connections will be shared between downloads performed by
 the same `Downloader` and cleaned up automatically when the object is garbage
 collected or there have been no downloads performed with it for a grace period.
-See [`Downloader`](@ref) for more info about configuration and usage.
+See `Downloader` for more info about configuration and usage.
 
 If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when
@@ -221,8 +221,8 @@ end
         throw      :: Bool
         downloader :: Downloader
 
-Make a request to the given url, returning a [`Response`](@ref) object capturing
-the status, headers and other information about the response. The body of the
+Make a request to the given url, returning a `Response` object capturing the
+status, headers and other information about the response. The body of the
 reponse is written to `output` if specified and discarded otherwise.
 
 Other options are the same as for `download` except for `progress` which must be
