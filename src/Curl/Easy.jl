@@ -1,14 +1,7 @@
-struct Progress
-    dl_total :: curl_off_t
-    dl_now   :: curl_off_t
-    ul_total :: curl_off_t
-    ul_now   :: curl_off_t
-end
-
 mutable struct Easy
     handle   :: Ptr{Cvoid}
-    progress :: Channel{Progress}
-    buffers  :: Channel{Vector{UInt8}}
+    output   :: Channel{Vector{UInt8}}
+    progress :: Channel{NTuple{4,Int}}
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
     code     :: CURLcode
@@ -18,8 +11,8 @@ end
 function Easy()
     easy = Easy(
         curl_easy_init(),
-        Channel{Progress}(Inf),
         Channel{Vector{UInt8}}(Inf),
+        Channel{NTuple{4,Int}}(Inf),
         C_NULL,
         String[],
         typemax(CURLcode),
@@ -62,6 +55,13 @@ function set_url(easy::Easy, url::Union{String, SubString{String}})
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
+function set_method(easy::Easy, method::Union{String, SubString{String}})
+    # TODO: ideally, Clang would generate Cstring signatures
+    Base.unsafe_convert(Cstring, method) # error checking
+    @check curl_easy_setopt(easy.handle, CURLOPT_CUSTOMREQUEST, method)
+end
+set_method(easy::Easy, method::AbstractString) = set_method(easy, String(method))
+
 function set_verbose(easy::Easy, verbose::Bool)
     @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
 end
@@ -92,24 +92,24 @@ function get_effective_url(easy::Easy)
     return unsafe_string(url_ref[])
 end
 
-function get_response_code(easy::Easy)
+function get_response_status(easy::Easy)
     code_ref = Ref{Clong}()
     @check curl_easy_getinfo(easy.handle, CURLINFO_RESPONSE_CODE, code_ref)
     return Int(code_ref[])
 end
 
-function get_response_headers(easy::Easy)
+function get_response_info(easy::Easy)
     url = get_effective_url(easy)
-    status = get_response_code(easy)
+    status = get_response_status(easy)
+    message = ""
     headers = Pair{String,String}[]
-    response = ""
     if contains(url, r"^https?://"i)
-        response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
+        message = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
         for hdr in easy.res_hdrs
             if contains(hdr, r"^\s*$")
                 # ignore
             elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr)) !== nothing
-                response = m.captures[1]
+                message = m.captures[1]
                 empty!(headers)
             elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr)) !== nothing
                 push!(headers, lowercase(m.captures[1]) => m.captures[2])
@@ -118,39 +118,21 @@ function get_response_headers(easy::Easy)
             end
         end
     elseif contains(url, r"^s?ftps?://"i)
-        response = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[end]
+        message = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[end]
     else
         # TODO: parse headers of other protocols
     end
-    return response, headers
+    message = chomp(message)
+    endswith(message, '.') && (message = chop(message))
+    return url, status, message, headers
 end
 
-function get_error_message(easy::Easy)::String
-    status = get_response_code(easy)
-    status_re = Regex(status == 0 ? "" : "\\b$status\\b")
-    response = chomp(get_response_headers(easy)[1])
-    endswith(response, '.') && (response = chop(response))
-
-    easy.code == Curl.CURLE_OK &&
-        return isempty(response) ? "Error status $status" :
-            contains(response, status_re) ? response :
-                "$response (status $status)"
-
-    message = easy.errbuf[1] == 0 ?
+function get_curl_errstr(easy::Easy)
+    easy.code == Curl.CURLE_OK && return ""
+    errstr = easy.errbuf[1] == 0 ?
         unsafe_string(Curl.curl_easy_strerror(easy.code)) :
         GC.@preserve easy unsafe_string(pointer(easy.errbuf))
-    message = chomp(message)
-
-    isempty(response) && !isempty(message) &&
-        return status == 0 ? message : "$message (status $status)"
-
-    isempty(response) && (response = "Error status $status")
-    isempty(message)  && (message = "curl error $(easy.code)")
-
-    !contains(response, status_re) && !contains(message, status_re) &&
-        (message = "status $status; $message")
-
-    return "$response ($message)"
+    return chomp(errstr)
 end
 
 # callbacks
@@ -178,7 +160,7 @@ function write_callback(
     n = size * count
     buf = Array{UInt8}(undef, n)
     ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    put!(easy.buffers, buf)
+    put!(easy.output, buf)
     return n
 end
 
@@ -190,7 +172,7 @@ function progress_callback(
     ul_now   :: curl_off_t,
 )::Cint
     easy = unsafe_pointer_to_objref(easy_p)::Easy
-    put!(easy.progress, Progress(dl_total, dl_now, ul_total, ul_now))
+    put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
     return 0
 end
 
