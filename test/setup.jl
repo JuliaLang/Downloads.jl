@@ -7,26 +7,26 @@ using Downloads.Curl: contains
 
 include("json.jl")
 
-function download_body(url::AbstractString; headers=Union{}[], downloader=nothing)
-    sprint() do io
-        download(url, io, headers=headers, downloader=downloader)
+function download_body(url::AbstractString; kwargs...)
+    sprint() do output
+        download(url, output; kwargs...)
     end
 end
 
-function download_json(url::AbstractString; headers=Union{}[], downloader=nothing)
-    JSON.parse(download_body(url, headers=headers, downloader=downloader))
+function download_json(url::AbstractString; kwargs...)
+    JSON.parse(download_body(url; kwargs...))
 end
 
-function request_body(url::AbstractString; headers=Union{}[])
+function request_body(url::AbstractString; kwargs...)
     resp = nothing
     body = sprint() do output
-        resp = request(url, output=output, headers=headers)
+        resp = request(url; output=output, kwargs...)
     end
     return resp, body
 end
 
-function request_json(url::AbstractString; headers=Union{}[])
-    resp, body = request_body(url, headers=headers)
+function request_json(url::AbstractString; kwargs...)
+    resp, body = request_body(url; kwargs...)
     return resp, JSON.parse(body)
 end
 
