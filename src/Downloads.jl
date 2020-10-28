@@ -8,7 +8,7 @@ using .Curl
 
 export download, request, Downloader, Response, RequestError
 
-## Downloader: shared pool of connections ##
+## public API types ##
 
 """
     Downloader(; [ grace::Real = 30 ])
@@ -34,78 +34,6 @@ end
 
 const DOWNLOAD_LOCK = ReentrantLock()
 const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
-
-## download API ##
-
-"""
-    download(url, [ output = tempfile() ];
-        [ method = "GET", ]
-        [ headers = <none>, ]
-        [ progress = <none>, ]
-        [ verbose = false, ]
-        [ downloader = <default>, ]
-    ) -> output
-
-        url        :: AbstractString
-        output     :: Union{AbstractString, AbstractCmd, IO}
-        method     :: AbstractString
-        headers    :: Union{AbstractVector, AbstractDict}
-        progress   :: (total::Integer, now::Integer) --> Any
-        verbose    :: Bool
-        downloader :: Downloader
-
-Download a file from the given url, saving it to `output` or if not specified, a
-temporary path. The `output` can also be an `IO` handle, in which case the body
-of the response is streamed to that handle and the handle is returned. If
-`output` is a command, the command is run and output is sent to it on stdin.
-
-If the `downloader` keyword argument is provided, it must be a `Downloader`
-object. Resources and connections will be shared between downloads performed by
-the same `Downloader` and cleaned up automatically when the object is garbage
-collected or there have been no downloads performed with it for a grace period.
-See `Downloader` for more info about configuration and usage.
-
-If the `headers` keyword argument is provided, it must be a vector or dictionary
-whose elements are all pairs of strings. These pairs are passed as headers when
-downloading URLs with protocols that supports them, such as HTTP/S.
-
-If the `progress` keyword argument is provided, it must be a callback funtion
-which will be called whenever there are updates about the size and status of the
-ongoing download. The callback must take two integer arguments: `total` and
-`now` which are the total size of the download in bytes, and the number of bytes
-which have been downloaded so far. Note that `total` starts out as zero and
-remains zero until the server gives an indiation of the total size of the
-download (e.g. with a `Content-Length` header), which may never happen. So a
-well-behaved progress callback should handle a total size of zero gracefully.
-
-If the `verbose` optoin is set to true, `libcurl`, which is used to implement
-the download functionality will print debugging information to `stderr`.
-"""
-function download(
-    url        :: AbstractString,
-    output     :: Union{ArgWrite, Nothing} = nothing;
-    method     :: Union{AbstractString, Nothing} = nothing,
-    headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
-    progress   :: Union{Function, Nothing} = nothing,
-    verbose    :: Bool = false,
-    downloader :: Union{Downloader, Nothing} = nothing,
-) :: ArgWrite
-    arg_write(output) do output
-        response = request(
-            url,
-            output = output,
-            method = method,
-            headers = headers,
-            progress = progress,
-            verbose = verbose,
-            downloader = downloader,
-        )
-        response isa Response && 200 ≤ response.status < 300 && return output
-        throw(RequestError(url, Curl.CURLE_OK, "", response))
-    end
-end
-
-## request API ##
 
 """
     struct Response
@@ -194,6 +122,78 @@ function error_message(err::RequestError)
 
     return "$message ($errstr)"
 end
+
+## download API ##
+
+"""
+    download(url, [ output = tempfile() ];
+        [ method = "GET", ]
+        [ headers = <none>, ]
+        [ progress = <none>, ]
+        [ verbose = false, ]
+        [ downloader = <default>, ]
+    ) -> output
+
+        url        :: AbstractString
+        output     :: Union{AbstractString, AbstractCmd, IO}
+        method     :: AbstractString
+        headers    :: Union{AbstractVector, AbstractDict}
+        progress   :: (total::Integer, now::Integer) --> Any
+        verbose    :: Bool
+        downloader :: Downloader
+
+Download a file from the given url, saving it to `output` or if not specified, a
+temporary path. The `output` can also be an `IO` handle, in which case the body
+of the response is streamed to that handle and the handle is returned. If
+`output` is a command, the command is run and output is sent to it on stdin.
+
+If the `downloader` keyword argument is provided, it must be a `Downloader`
+object. Resources and connections will be shared between downloads performed by
+the same `Downloader` and cleaned up automatically when the object is garbage
+collected or there have been no downloads performed with it for a grace period.
+See `Downloader` for more info about configuration and usage.
+
+If the `headers` keyword argument is provided, it must be a vector or dictionary
+whose elements are all pairs of strings. These pairs are passed as headers when
+downloading URLs with protocols that supports them, such as HTTP/S.
+
+If the `progress` keyword argument is provided, it must be a callback funtion
+which will be called whenever there are updates about the size and status of the
+ongoing download. The callback must take two integer arguments: `total` and
+`now` which are the total size of the download in bytes, and the number of bytes
+which have been downloaded so far. Note that `total` starts out as zero and
+remains zero until the server gives an indiation of the total size of the
+download (e.g. with a `Content-Length` header), which may never happen. So a
+well-behaved progress callback should handle a total size of zero gracefully.
+
+If the `verbose` optoin is set to true, `libcurl`, which is used to implement
+the download functionality will print debugging information to `stderr`.
+"""
+function download(
+    url        :: AbstractString,
+    output     :: Union{ArgWrite, Nothing} = nothing;
+    method     :: Union{AbstractString, Nothing} = nothing,
+    headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
+    progress   :: Union{Function, Nothing} = nothing,
+    verbose    :: Bool = false,
+    downloader :: Union{Downloader, Nothing} = nothing,
+) :: ArgWrite
+    arg_write(output) do output
+        response = request(
+            url,
+            output = output,
+            method = method,
+            headers = headers,
+            progress = progress,
+            verbose = verbose,
+            downloader = downloader,
+        )
+        response isa Response && 200 ≤ response.status < 300 && return output
+        throw(RequestError(url, Curl.CURLE_OK, "", response))
+    end
+end
+
+## request API ##
 
 """
     request(url;
