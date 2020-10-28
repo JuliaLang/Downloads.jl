@@ -92,9 +92,9 @@ request(url;
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
 reponse is written to `output` if specified and discarded otherwise. The
-folowing options differ from the `download` function:
+following options differ from the `download` function:
 
-- `input` allows providing a request body; if provided default to PUT request
+- `input` allows providing a request body; if provided default to `PUT` request
 - `progress` is a callback taking four integers for upload and download progress
 - `throw` controls whether to throw or return a `RequestError` on request error
 
