@@ -17,7 +17,7 @@ The public API of `Downloads` consists of two functions and three types:
 - `request` — request a URL, returning a `Response` object indicating success
 - `Response` — a type capturing the status and other metadata about a request
 - `RequestError` — an error type thrown by `download` and `request` on error
-- `Download` — an object encapsulating shared resources for downloading
+- `Downloader` — an object encapsulating shared resources for downloading
 
 ### download
 
