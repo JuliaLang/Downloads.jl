@@ -86,23 +86,17 @@ function download(
     output     :: Union{ArgWrite, Nothing} = nothing;
     method     :: Union{AbstractString, Nothing} = nothing,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
-    progress   :: Function = (total, now) -> nothing,
+    progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
-    if !hasmethod(progress, Tuple{Int,Int}) &&
-        hasmethod(progress, Tuple{Any})
-        original_progress = progress
-        progress = (total, now) ->
-            original_progress((dl_total = total, dl_now = now))
-    end
     arg_write(output) do output
         response = request(
             url,
             output = output,
             method = method,
             headers = headers,
-            progress = (total, now, _, _) -> progress(total, now),
+            progress = progress,
             verbose = verbose,
             downloader = downloader,
         )
@@ -243,7 +237,7 @@ function request(
     output     :: ArgWrite = devnull,
     method     :: Union{AbstractString, Nothing} = nothing,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
-    progress   :: Function = (dl_total, dl_now, ul_total, ul_now) -> nothing,
+    progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
     throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
@@ -259,12 +253,14 @@ function request(
     end
     local response
     input_size = arg_read_size(input)
+    progress = p_func(progress, input, output)
     arg_read(input) do input
         arg_write(output) do output
             with_handle(Easy()) do easy
                 # setup the request
                 set_url(easy, url)
                 set_verbose(easy, verbose)
+                add_headers(easy, headers)
                 if input !== devnull
                     enable_upload(easy)
                     if input_size !== nothing
@@ -277,8 +273,7 @@ function request(
                     end
                 end
                 method !== nothing && set_method(easy, method)
-                add_headers(easy, headers)
-                enable_progress(easy)
+                progress !== nothing && enable_progress(easy)
 
                 # do the request
                 add_handle(downloader.multi, easy)
@@ -287,8 +282,10 @@ function request(
                         @async for buf in easy.output
                             write(output, buf)
                         end
-                        @async for prog in easy.progress
-                            progress(prog...)
+                        if progress !== nothing
+                            @async for prog in easy.progress
+                                progress(prog...)
+                            end
                         end
                         if input !== devnull
                             @async upload_data(easy, input)
@@ -309,6 +306,23 @@ function request(
     end
     return response
 end
+
+## helper functions ##
+
+function p_func(progress::Function, input::ArgRead, output::ArgWrite)
+    hasmethod(progress, NTuple{4,Int}) && return progress
+    hasmethod(progress, NTuple{2,Int}) ||
+        throw(ArgumentError("invalid progress callback"))
+
+    input === devnull && output !== devnull &&
+        return (total, now, _, _) -> progress(total, now)
+    input !== devnull && output === devnull &&
+        return (_, _, total, now) -> progress(total, now)
+
+    (dl_total, dl_now, ul_total, ul_now) ->
+        progress(dl_total + ul_total, dl_now + ul_now)
+end
+p_func(progress::Nothing, input::ArgRead, output::ArgWrite) = nothing
 
 arg_read_size(path::AbstractString) = filesize(path)
 arg_read_size(io::IOBuffer) = io.size - io.ptr + 1
