@@ -241,35 +241,23 @@ include("setup.jl")
 
         @testset "progress" begin
             url = "https://httpbingo.org/drip"
-            @testset "request" begin
-                progress = NTuple{4,Int}[]
-                request(url; progress = (p...) -> push!(progress, p))
-                @test progress[1][1] == 0
-                @test progress[1][2] == 0
-                @test progress[end][1] == 10
-                @test progress[end][2] == 10
-                @test issorted(p[1] for p in progress)
-                @test issorted(p[2] for p in progress)
-            end
-            @testset "download" begin
-                progress = NTuple{2,Int}[]
-                download(url; progress = (p...) -> push!(progress, p))
-                @test progress[1][1] == 0
-                @test progress[1][2] == 0
-                @test progress[end][1] == 10
-                @test progress[end][2] == 10
-                @test issorted(p[1] for p in progress)
-                @test issorted(p[2] for p in progress)
-            end
-            @testset "download (compat)" begin
-                progress = NTuple{2,Int}[]
-                download(url; progress = p -> push!(progress, (p.dl_total, p.dl_now)))
-                @test progress[1][1] == 0
-                @test progress[1][2] == 0
-                @test progress[end][1] == 10
-                @test progress[end][2] == 10
-                @test issorted(p[1] for p in progress)
-                @test issorted(p[2] for p in progress)
+            progress = []
+            p_funcs = [
+                (prog...) -> push!(progress, prog),
+                (total, now) -> push!(progress, (total, now)),
+                (total, now, _, _) -> push!(progress, (total, now)),
+            ]
+            for f in (download, request), p in p_funcs
+                @testset "request" begin
+                    empty!(progress)
+                    f(url; progress = p)
+                    @test progress[1][1] == 0
+                    @test progress[1][2] == 0
+                    @test progress[end][1] == 10
+                    @test progress[end][2] == 10
+                    @test issorted(p[1] for p in progress)
+                    @test issorted(p[2] for p in progress)
+                end
             end
         end
     end
