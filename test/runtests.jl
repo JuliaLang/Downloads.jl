@@ -242,12 +242,17 @@ include("setup.jl")
         @testset "progress" begin
             url = "https://httpbingo.org/drip"
             progress = []
+            dl_funcs = [
+                download,
+                (url; progress) ->
+                    request(url, output=devnull, progress=progress)
+            ]
             p_funcs = [
                 (prog...) -> push!(progress, prog),
                 (total, now) -> push!(progress, (total, now)),
                 (total, now, _, _) -> push!(progress, (total, now)),
             ]
-            for f in (download, request), p in p_funcs
+            for f in dl_funcs, p in p_funcs
                 @testset "request" begin
                     empty!(progress)
                     f(url; progress = p)

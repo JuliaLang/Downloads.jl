@@ -197,9 +197,9 @@ end
 
 """
     request(url;
-        [ input = devnull, ]
-        [ output = devnull, ]
-        [ method = "GET", ]
+        [ input = <none>, ]
+        [ output = <none>, ]
+        [ method = input ? "PUT" : output ? "GET" : "HEAD", ]
         [ headers = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
@@ -219,10 +219,14 @@ end
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
-reponse is written to `output` if specified and discarded otherwise. The
-folowing options differ from the `download` function:
+reponse is written to `output` if specified and discarded otherwise. For HTTP/S
+requests, if an `input` stream is given, a `PUT` request is made; otherwise if
+an `output` stream is givven, a `GET` request is made; if neither is given a
+`HEAD` request is made. For other protocols, appropriate default methods are
+used based on what combination of input and output are requested. The following
+options differ from the `download` function:
 
-- `input` allows providing a request body; if provided default to PUT request
+- `input` allows providing a request body; if provided default to `PUT` request
 - `progress` is a callback taking four integers for upload and download progress
 - `throw` controls whether to throw or return a `RequestError` on request error
 
@@ -233,8 +237,8 @@ with getting a response at all, then a `RequestError` is thrown or returned.
 """
 function request(
     url        :: AbstractString;
-    input      :: ArgRead = devnull,
-    output     :: ArgWrite = devnull,
+    input      :: Union{ArgRead, Nothing} = nothing,
+    output     :: Union{ArgWrite, Nothing} = nothing,
     method     :: Union{AbstractString, Nothing} = nothing,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
     progress   :: Union{Function, Nothing} = nothing,
@@ -252,6 +256,10 @@ function request(
         end
     end
     local response
+    have_input = input !== nothing
+    have_output = output !== nothing
+    input = something(input, devnull)
+    output = something(output, devnull)
     input_size = arg_read_size(input)
     progress = p_func(progress, input, output)
     arg_read(input) do input
@@ -261,7 +269,7 @@ function request(
                 set_url(easy, url)
                 set_verbose(easy, verbose)
                 add_headers(easy, headers)
-                if input !== devnull
+                if have_input
                     enable_upload(easy)
                     if input_size !== nothing
                         set_upload_size(easy, input_size)
@@ -271,6 +279,8 @@ function request(
                             seek(input, Int(offset))
                         end
                     end
+                else
+                    set_body(easy, have_output)
                 end
                 method !== nothing && set_method(easy, method)
                 progress !== nothing && enable_progress(easy)
@@ -287,7 +297,7 @@ function request(
                                 progress(prog...)
                             end
                         end
-                        if input !== devnull
+                        if have_input
                             @async upload_data(easy, input)
                         end
                     end
@@ -326,6 +336,7 @@ p_func(progress::Nothing, input::ArgRead, output::ArgWrite) = nothing
 
 arg_read_size(path::AbstractString) = filesize(path)
 arg_read_size(io::IOBuffer) = io.size - io.ptr + 1
+arg_read_size(::Base.DevNull) = 0
 arg_read_size(::Any) = nothing
 
 end # module

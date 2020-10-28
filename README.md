@@ -69,9 +69,9 @@ the download functionality will print debugging information to `stderr`.
 
 ```jl
 request(url;
-    [ input = devnull, ]
-    [ output = devnull, ]
-    [ method = "GET", ]
+    [ input = <none>, ]
+    [ output = <none>, ]
+    [ method = input ? "PUT" : output ? "GET" : "HEAD", ]
     [ headers = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
@@ -91,10 +91,14 @@ request(url;
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
-reponse is written to `output` if specified and discarded otherwise. The
-folowing options differ from the `download` function:
+reponse is written to `output` if specified and discarded otherwise. For HTTP/S
+requests, if an `input` stream is given, a `PUT` request is made; otherwise if
+an `output` stream is givven, a `GET` request is made; if neither is given a
+`HEAD` request is made. For other protocols, appropriate default methods are
+used based on what combination of input and output are requested. The following
+options differ from the `download` function:
 
-- `input` allows providing a request body; if provided default to PUT request
+- `input` allows providing a request body; if provided default to `PUT` request
 - `progress` is a callback taking four integers for upload and download progress
 - `throw` controls whether to throw or return a `RequestError` on request error
 

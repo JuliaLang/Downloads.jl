@@ -74,6 +74,10 @@ function set_verbose(easy::Easy, verbose::Bool)
     @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
 end
 
+function set_body(easy::Easy, body::Bool)
+    @check curl_easy_setopt(easy.handle, CURLOPT_NOBODY, !body)
+end
+
 function set_upload_size(easy::Easy, size::Integer)
     @check curl_easy_setopt(easy.handle, CURLOPT_INFILESIZE_LARGE, size)
 end
