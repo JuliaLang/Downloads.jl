@@ -79,7 +79,8 @@ function set_body(easy::Easy, body::Bool)
 end
 
 function set_upload_size(easy::Easy, size::Integer)
-    @check curl_easy_setopt(easy.handle, CURLOPT_INFILESIZE_LARGE, size)
+    opt = Sys.WORD_SIZE ≥ 64 ? CURLOPT_INFILESIZE_LARGE : CURLOPT_INFILESIZE
+    @check curl_easy_setopt(easy.handle, opt, size)
 end
 
 function set_seeker(seeker::Function, easy::Easy)
