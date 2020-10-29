@@ -308,7 +308,7 @@ function add_seek_callbacks(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
 
-    # set read callback
+    # set seek callback
     seek_cb = @cfunction(seek_callback,
         Cint, (Ptr{Cvoid}, curl_off_t, Cint))
     @check curl_easy_setopt(easy.handle, CURLOPT_SEEKFUNCTION, seek_cb)
