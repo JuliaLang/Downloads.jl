@@ -60,8 +60,14 @@ function set_url(easy::Easy, url::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, url) # error checking
     @check curl_easy_setopt(easy.handle, CURLOPT_URL, url)
+    set_ssl_verify(easy, verify_host(url, "ssl"))
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
+
+function set_ssl_verify(easy::Easy, verify::Bool)
+    @check curl_easy_setopt(easy.handle, CURLOPT_SSL_VERIFYPEER, verify)
+    @check curl_easy_setopt(easy.handle, CURLOPT_SSL_VERIFYHOST, verify*2)
+end
 
 function set_method(easy::Easy, method::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
@@ -286,7 +292,7 @@ function add_callbacks(easy::Easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_WRITEFUNCTION, write_cb)
     @check curl_easy_setopt(easy.handle, CURLOPT_WRITEDATA, easy_p)
 
-    # set progress callbacks
+    # set progress callback
     progress_cb = @cfunction(progress_callback,
         Cint, (Ptr{Cvoid}, curl_off_t, curl_off_t, curl_off_t, curl_off_t))
     @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFOFUNCTION, progress_cb)
