@@ -25,6 +25,7 @@ using LibCURL
 using LibCURL: curl_off_t
 # not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
 
+using NetworkOptions
 using Base: preserve_handle, unpreserve_handle
 
 include("utils.jl")

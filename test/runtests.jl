@@ -266,6 +266,30 @@ include("setup.jl")
             end
         end
     end
+
+    @testset "bad TLS" begin
+        urls = [
+            "https://wrong.host.badssl.com"
+            "https://untrusted-root.badssl.com"
+        ]
+        withenv("JULIA_SSL_NO_VERIFY_HOSTS" => nothing) do
+            for url in urls
+                resp = request(url, throw=false)
+                @test resp isa RequestError
+                # FIXME: we should use Curl.CURLE_PEER_FAILED_VERIFICATION
+                # but LibCURL has gotten out of sync with curl and some
+                # of the constants are no longer correct; this is one
+                @test resp.code == 60
+            end
+        end
+        withenv("JULIA_SSL_NO_VERIFY_HOSTS" => "**.badssl.com") do
+            for url in urls
+                resp = request(url, throw=false)
+                @test resp isa Response
+                @test resp.status == 200
+            end
+        end
+    end
 end
 
 Downloads.DOWNLOADER[] = nothing
