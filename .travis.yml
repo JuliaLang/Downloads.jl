@@ -11,8 +11,9 @@ os:
   - windows
 
 arch:
-  - x64
   - x86
+  - x64
+  - arm64
 
 notifications:
   email: false
