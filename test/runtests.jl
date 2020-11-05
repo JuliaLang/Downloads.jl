@@ -1,5 +1,7 @@
 include("setup.jl")
 
+println("$(@__FILE__):$(@__LINE__)")
+
 @testset "Downloads.jl" begin
     @testset "API coverage" begin
         value = "Julia is great!"
@@ -32,6 +34,7 @@ include("setup.jl")
             @test value == read(path, String)
             rm(path)
         end
+        println("$(@__FILE__):$(@__LINE__)")
 
         # not an API test, but a convenient place to test this
         @testset "follow redirects" begin
@@ -42,12 +45,14 @@ include("setup.jl")
             rm(path)
         end
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "get request" begin
         url = "$server/get"
         json = download_json(url)
         @test json["url"] == url
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "put request" begin
         url = "$server/put"
@@ -56,6 +61,7 @@ include("setup.jl")
         @test json["url"] == url
         @test json["data"] == data
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "post request" begin
         url = "$server/post"
@@ -64,6 +70,7 @@ include("setup.jl")
         @test json["url"] == url
         @test json["data"] == data
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "put from file" begin
         url = "$server/put"
@@ -74,6 +81,7 @@ include("setup.jl")
         @test json["data"] == read(file, String)
         rm(file)
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "redirected get" begin
         url = "$server/get"
@@ -81,6 +89,7 @@ include("setup.jl")
         json = download_json(url)
         @test json["url"] == url
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "redirected put" begin
         url = "$server/put"
@@ -90,6 +99,7 @@ include("setup.jl")
         @test json["url"] == url
         @test json["data"] == data
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "redirected post" begin
         url = "$server/post"
@@ -99,6 +109,7 @@ include("setup.jl")
         @test json["url"] == url
         @test json["data"] == data
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "redirected put from file" begin
         url = "$server/put"
@@ -109,6 +120,7 @@ include("setup.jl")
         @test json["url"] == url
         @test json["data"] == read(file, String)
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "headers" begin
         url = "$server/headers"
@@ -140,45 +152,55 @@ include("setup.jl")
             @test !("Accept" in keys(json["headers"]))
         end
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "errors" begin
         @test_throws ArgumentError download("ba\0d")
+        println("$(@__FILE__):$(@__LINE__)")
         @test_throws ArgumentError download("good", "ba\0d")
+        println("$(@__FILE__):$(@__LINE__)")
 
         err = @exception download("xyz://domain.invalid")
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Protocol \"xyz\" not supported")
+        println("$(@__FILE__):$(@__LINE__)")
 
         err = @exception request("xyz://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Protocol \"xyz\" not supported")
+        println("$(@__FILE__):$(@__LINE__)")
 
         err = @exception download("https://domain.invalid")
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
+        println("$(@__FILE__):$(@__LINE__)")
 
         err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
+        println("$(@__FILE__):$(@__LINE__)")
 
         err = @exception download("$server/status/404")
         @test err isa RequestError
         @test err.code == 0 && isempty(err.message)
         @test err.response.status == 404
         @test contains(err.response.message, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+        println("$(@__FILE__):$(@__LINE__)")
 
         resp = request("$server/get", input = IOBuffer("Hi"))
         @test resp isa Response
         @test resp.status == 405
         @test contains(resp.message, r"^HTTP/\d+(?:\.\d+)?\s+405\b")
+        println("$(@__FILE__):$(@__LINE__)")
 
         path = tempname()
         @test_throws RequestError download("$server/status/404", path)
         @test !ispath(path)
+        println("$(@__FILE__):$(@__LINE__)")
     end
 
     @testset "concurrent requests" begin
@@ -204,6 +226,7 @@ include("setup.jl")
             end
         end
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "request API" begin
         @testset "basic request usage" begin
@@ -266,14 +289,17 @@ include("setup.jl")
             end
         end
     end
+    println("$(@__FILE__):$(@__LINE__)")
 
     @testset "bad TLS" begin
         urls = [
             "https://wrong.host.badssl.com"
             "https://untrusted-root.badssl.com"
         ]
+        println("$(@__FILE__):$(@__LINE__)")
         withenv("JULIA_SSL_NO_VERIFY_HOSTS" => nothing) do
             for url in urls
+                @show url
                 resp = request(url, throw=false)
                 @test resp isa RequestError
                 # FIXME: we should use Curl.CURLE_PEER_FAILED_VERIFICATION
@@ -282,13 +308,16 @@ include("setup.jl")
                 @test resp.code == 60
             end
         end
+        println("$(@__FILE__):$(@__LINE__)")
         withenv("JULIA_SSL_NO_VERIFY_HOSTS" => "**.badssl.com") do
             for url in urls
+                @show url
                 resp = request(url, throw=false)
                 @test resp isa Response
                 @test resp.status == 200
             end
         end
+        println("$(@__FILE__):$(@__LINE__)")
     end
 end
 
