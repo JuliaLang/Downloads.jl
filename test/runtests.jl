@@ -172,17 +172,17 @@ println("$(@__FILE__):$(@__LINE__)")
         @test startswith(err.message, "Protocol \"xyz\" not supported")
         println("$(@__FILE__):$(@__LINE__)")
 
-        err = @exception download("https://domain.invalid")
-        @test err isa RequestError
-        @test err.code != 0
-        @test startswith(err.message, "Could not resolve host")
-        println("$(@__FILE__):$(@__LINE__)")
+        # err = @exception download("https://domain.invalid")
+        # @test err isa RequestError
+        # @test err.code != 0
+        # @test startswith(err.message, "Could not resolve host")
+        # println("$(@__FILE__):$(@__LINE__)")
 
-        err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
-        @test err isa RequestError
-        @test err.code != 0
-        @test startswith(err.message, "Could not resolve host")
-        println("$(@__FILE__):$(@__LINE__)")
+        # err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
+        # @test err isa RequestError
+        # @test err.code != 0
+        # @test startswith(err.message, "Could not resolve host")
+        # println("$(@__FILE__):$(@__LINE__)")
 
         err = @exception download("$server/status/404")
         @test err isa RequestError
