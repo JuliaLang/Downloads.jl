@@ -16,14 +16,17 @@ export download, request, Downloader, Response, RequestError
 `Downloader` objects are used to perform individual `download` operations.
 Connections, lookups and other resources are shared within a `Downloader`. These
 connections and resources are cleaned up when the `Downloader` is garbage
-collected or a configurable grace period (default: 30 seconds) after the last
+collected or a configurable `grace` period (default: 30 seconds) after the last
 time the `Downloader` was used to download anything. If the grace period is set
 to zero, all resources will be cleaned up as soon as there are no associated
 downloads in progress. If the grace period is set to `Inf` then resources are
 not cleaned up until the `Downloader` object is garbage collected.
 """
-struct Downloader
+mutable struct Downloader
     multi::Multi
+    easy_hook::Union{Function, Nothing}
+
+    Downloader(multi::Multi) = new(multi, EASY_HOOK[])
 end
 Downloader(; grace::Real=30) = Downloader(Multi(grace_ms(grace)))
 
@@ -32,8 +35,13 @@ function grace_ms(grace::Real)
     grace <= typemax(UInt64) ÷ 1000 ? round(UInt64, 1000*grace) : typemax(UInt64)
 end
 
+function easy_hook(downloader::Downloader, easy::Easy, info::NamedTuple)
+    downloader.easy_hook !== nothing && downloader.easy_hook(easy, info)
+end
+
 const DOWNLOAD_LOCK = ReentrantLock()
 const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
+const EASY_HOOK = Ref{Union{Function, Nothing}}(nothing)
 
 """
     struct Response
@@ -284,6 +292,8 @@ function request(
                 end
                 method !== nothing && set_method(easy, method)
                 progress !== nothing && enable_progress(easy)
+                info = (url = url, method = method, headers = headers)
+                easy_hook(downloader, easy, info)
 
                 # do the request
                 add_handle(downloader.multi, easy)
