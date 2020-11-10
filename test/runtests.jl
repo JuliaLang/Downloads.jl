@@ -266,6 +266,43 @@ include("setup.jl")
             end
         end
     end
+
+    @testset "bad TLS" begin
+        urls = [
+            "https://wrong.host.badssl.com"
+            "https://untrusted-root.badssl.com"
+        ]
+        @testset "bad TLS is rejected" for url in urls
+            resp = request(url, throw=false)
+            @test resp isa RequestError
+            # FIXME: we should use Curl.CURLE_PEER_FAILED_VERIFICATION
+            # but LibCURL has gotten out of sync with curl and some
+            # of the constants are no longer correct; this is one
+            @test resp.code == 60
+        end
+        @testset "easy hook work-around" begin
+            local url
+            easy_hook = (easy, info) -> begin
+                @test info.url == url
+                Curl.curl_easy_setopt(easy.handle, Curl.CURLOPT_SSL_VERIFYPEER, 0)
+                Curl.curl_easy_setopt(easy.handle, Curl.CURLOPT_SSL_VERIFYHOST, 0)
+            end
+            downloader = Downloader()
+            downloader.easy_hook = easy_hook
+            for outer url in urls
+                resp = request(url, throw=false, downloader=downloader)
+                @test resp isa Response
+                @test resp.status == 200
+            end
+            Downloads.EASY_HOOK[] = easy_hook
+            Downloads.DOWNLOADER[] = nothing
+            for outer url in urls
+                resp = request(url, throw=false)
+                @test resp isa Response
+                @test resp.status == 200
+            end
+        end
+    end
 end
 
 Downloads.DOWNLOADER[] = nothing
