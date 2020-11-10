@@ -308,13 +308,15 @@ include("setup.jl")
             Downloads.EASY_HOOK[] = nothing
         end
         ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**.badssl.com"
-        @testset "no verify SSL override" for url in urls
+        @testset "SSL no verify override" for url in urls
             resp = request(url, throw=false)
             @test resp isa Response
             @test resp.status == 200
         end
         if save_env !== nothing
             ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = save_env
+        else
+            delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
         end
     end
 end
