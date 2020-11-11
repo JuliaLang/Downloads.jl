@@ -50,10 +50,12 @@ function set_defaults(easy::Easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 50)
     @check curl_easy_setopt(easy.handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
     @check curl_easy_setopt(easy.handle, CURLOPT_USERAGENT, USER_AGENT)
+end
 
-    # tell curl where to find HTTPS certs
-    certs_file = normpath(Sys.BINDIR::String, "..", "share", "julia", "cert.pem")
-    @check curl_easy_setopt(easy.handle, CURLOPT_CAINFO, certs_file)
+function set_ca_roots_path(easy::Easy, path::AbstractString)
+    Base.unsafe_convert(Cstring, path) # error checking
+    opt = isdir(path) ? CURLOPT_CAPATH : CURLOPT_CAINFO
+    @check curl_easy_setopt(easy.handle, CURLOPT_CAINFO, path)
 end
 
 function set_url(easy::Easy, url::Union{String, SubString{String}})
