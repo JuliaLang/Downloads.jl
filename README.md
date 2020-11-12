@@ -1,5 +1,8 @@
 # Downloads
 
+[![Build Status](https://travis-ci.com/JuliaLang/Downloads.jl.svg?branch=master)](https://travis-ci.com/JuliaLang/Downloads.jl)
+[![Codecov](https://codecov.io/gh/JuliaLang/Downloads.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Downloads.jl)
+
 The `Downloads` package provides a single function, `download`, which provides
 cross-platform, multi-protocol, in-process download functionality implemented
 with [libcurl](https://curl.haxx.se/libcurl/). It uses libcurl's multi-handle
