@@ -9,6 +9,7 @@ export
         set_body,
         set_upload_size,
         set_seeker,
+        set_ca_roots_path,
         add_headers,
         enable_upload,
         enable_progress,
@@ -33,6 +34,12 @@ include("utils.jl")
 function __init__()
     @check curl_global_init(CURL_GLOBAL_ALL)
 end
+
+const CURL_VERSION_INFO = unsafe_load(curl_version_info(CURLVERSION_NOW))
+const SSL_VERSION = unsafe_string(CURL_VERSION_INFO.ssl_version)
+const SYSTEM_SSL =
+    Sys.isapple() && startswith(SSL_VERSION, "SecureTranspart")
+    Sys.iswindows() && startswith(SSL_VERSION, "Schannel")
 
 const CURL_VERSION = unsafe_string(curl_version())
 const USER_AGENT = "$CURL_VERSION julia/$VERSION"

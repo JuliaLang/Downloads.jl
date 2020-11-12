@@ -1,6 +1,7 @@
 module Downloads
 
 using Base.Experimental: @sync
+using NetworkOptions
 using ArgTools
 
 include("Curl/Curl.jl")
@@ -24,9 +25,10 @@ not cleaned up until the `Downloader` object is garbage collected.
 """
 mutable struct Downloader
     multi::Multi
+    ca_roots::Union{String, Nothing}
     easy_hook::Union{Function, Nothing}
 
-    Downloader(multi::Multi) = new(multi, EASY_HOOK[])
+    Downloader(multi::Multi) = new(multi, get_ca_roots(), EASY_HOOK[])
 end
 Downloader(; grace::Real=30) = Downloader(Multi(grace_ms(grace)))
 
@@ -37,6 +39,13 @@ end
 
 function easy_hook(downloader::Downloader, easy::Easy, info::NamedTuple)
     downloader.easy_hook !== nothing && downloader.easy_hook(easy, info)
+end
+
+get_ca_roots() = Curl.SYSTEM_SSL ? ca_roots() : ca_roots_path()
+
+function set_ca_roots(downloader::Downloader, easy::Easy)
+    ca_roots = downloader.ca_roots
+    ca_roots !== nothing && set_ca_roots_path(easy, ca_roots)
 end
 
 const DOWNLOAD_LOCK = ReentrantLock()
@@ -292,6 +301,7 @@ function request(
                 end
                 method !== nothing && set_method(easy, method)
                 progress !== nothing && enable_progress(easy)
+                set_ca_roots(downloader, easy)
                 info = (url = url, method = method, headers = headers)
                 easy_hook(downloader, easy, info)
 
