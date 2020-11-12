@@ -166,7 +166,7 @@ in which case both the inner and outer code and message may be of interest.
 ### Downloader
 
 ```jl
-    Downloader(; [ grace::Real = 30 ])
+Downloader(; [ grace::Real = 30 ])
 ```
 
 `Downloader` objects are used to perform individual `download` operations.
