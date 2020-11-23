@@ -96,6 +96,18 @@ function set_seeker(seeker::Function, easy::Easy)
     easy.seeker = seeker
 end
 
+function set_timeout(easy::Easy, timeout::Real)
+    timeout > 0 ||
+        throw(ArgumentError("timeout must be positive, got $timeout"))
+    if timeout ≤ typemax(Clong) ÷ 1000
+        timeout_ms = round(Clong, timeout * 1000)
+        @check curl_easy_setopt(easy.handle, CURLOPT_TIMEOUT_MS, timeout_ms)
+    else
+        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
+        @check curl_easy_setopt(easy.handle, CURLOPT_TIMEOUT, timeout)
+    end
+end
+
 function add_header(easy::Easy, hdr::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, hdr) # error checking
