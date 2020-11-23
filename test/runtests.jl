@@ -47,6 +47,10 @@ include("setup.jl")
         url = "$server/get"
         json = download_json(url)
         @test json["url"] == url
+        resp = request(url)
+        @test resp isa Response
+        @test resp.proto == "https"
+        @test resp.status == 200
     end
 
     @testset "put request" begin
@@ -141,6 +145,31 @@ include("setup.jl")
         end
     end
 
+    @testset "file protocol" begin
+        @testset "success" begin
+            path = tempname()
+            data = rand(UInt8, 256)
+            write(path, data)
+            temp = download("file://$path")
+            @test data == read(temp)
+            output = IOBuffer()
+            resp = request("file://$path", output = output)
+            @test resp isa Response
+            @test resp.proto == "file"
+            @test resp.status == 0
+            @test take!(output) == data
+            rm(path)
+        end
+        @testset "failure" begin
+            path = tempname()
+            @test_throws RequestError download("file://$path")
+            @test_throws RequestError request("file://$path")
+            output = IOBuffer()
+            resp = request("file://$path", output = output, throw = false)
+            @test resp isa RequestError
+        end
+    end
+
     @testset "errors" begin
         @test_throws ArgumentError download("ba\0d")
         @test_throws ArgumentError download("good", "ba\0d")
@@ -149,32 +178,38 @@ include("setup.jl")
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Protocol \"xyz\" not supported")
+        @test err.response.proto === nothing
 
         err = @exception request("xyz://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Protocol \"xyz\" not supported")
+        @test err.response.proto === nothing
 
         err = @exception download("https://domain.invalid")
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
+        @test err.response.proto === nothing
 
         err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
+        @test err.response.proto === nothing
 
         err = @exception download("$server/status/404")
         @test err isa RequestError
         @test err.code == 0 && isempty(err.message)
         @test err.response.status == 404
         @test contains(err.response.message, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
+        @test err.response.proto === "https"
 
         resp = request("$server/get", input = IOBuffer("Hi"))
         @test resp isa Response
         @test resp.status == 405
         @test contains(resp.message, r"^HTTP/\d+(?:\.\d+)?\s+405\b")
+        @test err.response.proto === "https"
 
         path = tempname()
         @test_throws RequestError download("$server/status/404", path)
