@@ -141,6 +141,68 @@ end
 
 # response info
 
+function get_protocol(easy::Easy)
+    proto_ref = Ref{Clong}()
+    @check curl_easy_getinfo(easy.handle, CURLINFO_PROTOCOL, proto_ref)
+    proto = proto_ref[]
+    proto == CURLPROTO_DICT   && return "dict"
+    proto == CURLPROTO_FILE   && return "file"
+    proto == CURLPROTO_FTP    && return "ftp"
+    proto == CURLPROTO_FTPS   && return "ftps"
+    proto == CURLPROTO_GOPHER && return "gopher"
+    proto == CURLPROTO_HTTP   && return "http"
+    proto == CURLPROTO_HTTPS  && return "https"
+    proto == CURLPROTO_IMAP   && return "imap"
+    proto == CURLPROTO_IMAPS  && return "imaps"
+    proto == CURLPROTO_LDAP   && return "ldap"
+    proto == CURLPROTO_LDAPS  && return "ldaps"
+    proto == CURLPROTO_POP3   && return "pop3"
+    proto == CURLPROTO_POP3S  && return "pop3s"
+    proto == CURLPROTO_RTMP   && return "rtmp"
+    proto == CURLPROTO_RTMPE  && return "rtmpe"
+    proto == CURLPROTO_RTMPS  && return "rtmps"
+    proto == CURLPROTO_RTMPT  && return "rtmpt"
+    proto == CURLPROTO_RTMPTE && return "rtmpte"
+    proto == CURLPROTO_RTMPTS && return "rtmpts"
+    proto == CURLPROTO_RTSP   && return "rtsp"
+    proto == CURLPROTO_SCP    && return "scp"
+    proto == CURLPROTO_SFTP   && return "sftp"
+    proto == CURLPROTO_SMB    && return "smb"
+    proto == CURLPROTO_SMBS   && return "smbs"
+    proto == CURLPROTO_SMTP   && return "smtp"
+    proto == CURLPROTO_SMTPS  && return "smtps"
+    proto == CURLPROTO_TELNET && return "telnet"
+    proto == CURLPROTO_TFTP   && return "tftp"
+    return nothing
+end
+
+status_2xx_ok(status::Integer) = 200 ≤ status < 300
+status_zero_ok(status::Integer) = status == 0
+
+const PROTOCOL_STATUS = Dict{String,Function}(
+    "dict"   => status_2xx_ok,
+    "file"   => status_zero_ok,
+    "ftp"    => status_2xx_ok,
+    "ftps"   => status_2xx_ok,
+    "http"   => status_2xx_ok,
+    "https"  => status_2xx_ok,
+    "ldap"   => status_zero_ok,
+    "ldaps"  => status_zero_ok,
+    "pop3"   => status_2xx_ok,
+    "pop3s"  => status_2xx_ok,
+    "rtsp"   => status_2xx_ok,
+    "scp"    => status_zero_ok,
+    "sftp"   => status_2xx_ok,
+    "smtp"   => status_2xx_ok,
+    "smtps"  => status_2xx_ok,
+)
+
+function status_ok(proto::AbstractString, status::Integer)
+    test = get(PROTOCOL_STATUS, proto, nothing)
+    test !== nothing && return test(status)::Bool
+    error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and checkc the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
+end
+
 function get_effective_url(easy::Easy)
     url_ref = Ref{Ptr{Cchar}}()
     @check curl_easy_getinfo(easy.handle, CURLINFO_EFFECTIVE_URL, url_ref)
@@ -154,11 +216,12 @@ function get_response_status(easy::Easy)
 end
 
 function get_response_info(easy::Easy)
+    proto = get_protocol(easy)
     url = get_effective_url(easy)
     status = get_response_status(easy)
     message = ""
     headers = Pair{String,String}[]
-    if contains(url, r"^https?://"i)
+    if proto in ("http", "https")
         message = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[1]
         for hdr in easy.res_hdrs
             if contains(hdr, r"^\s*$")
@@ -172,14 +235,14 @@ function get_response_info(easy::Easy)
                 @warn "malformed HTTP header" url status header=hdr
             end
         end
-    elseif contains(url, r"^s?ftps?://"i)
+    elseif proto in ("ftp", "ftps", "sftp")
         message = isempty(easy.res_hdrs) ? "" : easy.res_hdrs[end]
     else
         # TODO: parse headers of other protocols
     end
     message = chomp(message)
     endswith(message, '.') && (message = chop(message))
-    return url, status, message, headers
+    return proto, url, status, message, headers
 end
 
 function get_curl_errstr(easy::Easy)

@@ -15,10 +15,12 @@ export
         enable_upload,
         enable_progress,
         upload_data,
+        get_protocol,
         get_effective_url,
         get_response_status,
         get_response_info,
         get_curl_errstr,
+        status_ok,
     Multi,
         add_handle,
         remove_handle
