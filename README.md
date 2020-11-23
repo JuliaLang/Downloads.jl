@@ -28,6 +28,7 @@ The public API of `Downloads` consists of two functions and three types:
 download(url, [ output = tempfile() ];
     [ method = "GET", ]
     [ headers = <none>, ]
+    [ timeout = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
     [ downloader = <default>, ]
@@ -37,6 +38,7 @@ download(url, [ output = tempfile() ];
 - `output     :: Union{AbstractString, AbstractCmd, IO}`
 - `method     :: AbstractString`
 - `headers    :: Union{AbstractVector, AbstractDict}`
+- `timeout    :: Real`
 - `progress   :: (total::Integer, now::Integer) --> Any`
 - `verbose    :: Bool`
 - `downloader :: Downloader`
@@ -55,6 +57,10 @@ See `Downloader` for more info about configuration and usage.
 If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when
 downloading URLs with protocols that supports them, such as HTTP/S.
+
+The `timeout` keyword argument specifies a timeout for the download in seconds,
+with a resolution of milliseconds. By default no timeout is set, but this can
+also be explicitly requested by passing a timeout value of `Inf`.
 
 If the `progress` keyword argument is provided, it must be a callback funtion
 which will be called whenever there are updates about the size and status of the
@@ -76,6 +82,7 @@ request(url;
     [ output = <none>, ]
     [ method = input ? "PUT" : output ? "GET" : "HEAD", ]
     [ headers = <none>, ]
+    [ timeout = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
     [ throw = true, ]
@@ -87,6 +94,7 @@ request(url;
 - `output     :: Union{AbstractString, AbstractCmd, IO}`
 - `method     :: AbstractString`
 - `headers    :: Union{AbstractVector, AbstractDict}`
+- `timeout    :: Real`
 - `progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any`
 - `verbose    :: Bool`
 - `throw      :: Bool`

@@ -146,6 +146,7 @@ end
     download(url, [ output = tempfile() ];
         [ method = "GET", ]
         [ headers = <none>, ]
+        [ timeout = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
         [ downloader = <default>, ]
@@ -155,6 +156,7 @@ end
         output     :: Union{AbstractString, AbstractCmd, IO}
         method     :: AbstractString
         headers    :: Union{AbstractVector, AbstractDict}
+        timeout    :: Real
         progress   :: (total::Integer, now::Integer) --> Any
         verbose    :: Bool
         downloader :: Downloader
@@ -174,6 +176,10 @@ If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when
 downloading URLs with protocols that supports them, such as HTTP/S.
 
+The `timeout` keyword argument specifies a timeout for the download in seconds,
+with a resolution of milliseconds. By default no timeout is set, but this can
+also be explicitly requested by passing a timeout value of `Inf`.
+
 If the `progress` keyword argument is provided, it must be a callback funtion
 which will be called whenever there are updates about the size and status of the
 ongoing download. The callback must take two integer arguments: `total` and
@@ -191,6 +197,7 @@ function download(
     output     :: Union{ArgWrite, Nothing} = nothing;
     method     :: Union{AbstractString, Nothing} = nothing,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
+    timeout    :: Real = Inf,
     progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
     downloader :: Union{Downloader, Nothing} = nothing,
@@ -201,6 +208,7 @@ function download(
             output = output,
             method = method,
             headers = headers,
+            timeout = timeout,
             progress = progress,
             verbose = verbose,
             downloader = downloader,
@@ -218,6 +226,7 @@ end
         [ output = <none>, ]
         [ method = input ? "PUT" : output ? "GET" : "HEAD", ]
         [ headers = <none>, ]
+        [ timeout = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
         [ throw = true, ]
@@ -229,6 +238,7 @@ end
         output     :: Union{AbstractString, AbstractCmd, IO}
         method     :: AbstractString
         headers    :: Union{AbstractVector, AbstractDict}
+        timeout    :: Real
         progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any
         verbose    :: Bool
         throw      :: Bool
@@ -258,6 +268,7 @@ function request(
     output     :: Union{ArgWrite, Nothing} = nothing,
     method     :: Union{AbstractString, Nothing} = nothing,
     headers    :: Union{AbstractVector, AbstractDict} = Pair{String,String}[],
+    timeout    :: Real = Inf,
     progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
     throw      :: Bool = true,
@@ -284,6 +295,7 @@ function request(
             with_handle(Easy()) do easy
                 # setup the request
                 set_url(easy, url)
+                set_timeout(easy, timeout)
                 set_verbose(easy, verbose)
                 add_headers(easy, headers)
                 if have_input

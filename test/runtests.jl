@@ -239,6 +239,32 @@ include("setup.jl")
             @test json["url"] == url
         end
 
+        @testset "timeouts" begin
+            url = "$server/delay/2"
+            @testset "download" begin
+                @test_throws ArgumentError download(url, devnull, timeout = -1)
+                @test_throws ArgumentError download(url, devnull, timeout = 0)
+                @test_throws RequestError download(url, devnull, timeout = 1)
+                @test_throws RequestError download(url, devnull, timeout = 0.5)
+                @test download(url, devnull, timeout = 100) == devnull
+                @test download(url, devnull, timeout = Inf) == devnull
+            end
+            @testset "request(throw = true)" begin
+                @test_throws ArgumentError request(url, timeout = -1)
+                @test_throws ArgumentError request(url, timeout = 0)
+                @test_throws RequestError request(url, timeout = 1)
+                @test_throws RequestError request(url, timeout = 0.5)
+                @test request(url, timeout = 100) isa Response
+                @test request(url, timeout = Inf) isa Response
+            end
+            @testset "request(throw = false)" begin
+                @test request(url, throw = false, timeout = 1) isa RequestError
+                @test request(url, throw = false, timeout = 0.5) isa RequestError
+                @test request(url, throw = false, timeout = 100) isa Response
+                @test request(url, throw = false, timeout = Inf) isa Response
+            end
+        end
+
         @testset "progress" begin
             url = "https://httpbingo.org/drip"
             progress = []

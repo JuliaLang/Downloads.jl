@@ -10,6 +10,7 @@ export
         set_upload_size,
         set_seeker,
         set_ca_roots_path,
+        set_timeout,
         add_headers,
         enable_upload,
         enable_progress,
