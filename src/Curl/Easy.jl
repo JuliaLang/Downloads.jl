@@ -44,7 +44,7 @@ end
 
 function set_defaults(easy::Easy)
     # curl options
-    curl_easy_setopt(easy.handle, CURLOPT_TCP_FASTOPEN, true) # failure ok, unsupported
+    curl_easy_setopt(easy.handle, CURLOPT_TCP_FASTOPEN, false) # upstream error
     @check curl_easy_setopt(easy.handle, CURLOPT_NOSIGNAL, true)
     @check curl_easy_setopt(easy.handle, CURLOPT_FOLLOWLOCATION, true)
     @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 50)
