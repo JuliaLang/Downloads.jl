@@ -382,7 +382,7 @@ include("setup.jl")
     end
 end
 
-@testset "ftp download" begin
+@__MODULE__() == Main && @testset "ftp download" begin
     file = Downloads.download("ftp://xmlsoft.org/libxslt/libxslt-1.1.33.tar.gz")
     @test isfile(file)
     @test filesize(file) == 3444093
