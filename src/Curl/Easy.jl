@@ -199,7 +199,7 @@ const PROTOCOL_STATUS = Dict{String,Function}(
 function status_ok(proto::AbstractString, status::Integer)
     test = get(PROTOCOL_STATUS, proto, nothing)
     test !== nothing && return test(status)::Bool
-    error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and checkc the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
+    error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and check the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
 end
 
 function get_effective_url(easy::Easy)
