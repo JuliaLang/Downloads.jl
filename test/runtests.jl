@@ -1,6 +1,12 @@
 include("setup.jl")
 
 @testset "Downloads.jl" begin
+    @testset "libcurl configuration" begin
+        if VERSION > v"1.6-"
+            @test Curl.SYSTEM_SSL == Sys.iswindows() || Sys.isapple()
+        end
+    end
+
     @testset "API coverage" begin
         value = "Julia is great!"
         base64 = "SnVsaWEgaXMgZ3JlYXQh"
