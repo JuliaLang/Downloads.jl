@@ -62,12 +62,22 @@ function set_url(easy::Easy, url::Union{String, SubString{String}})
     Base.unsafe_convert(Cstring, url) # error checking
     @check curl_easy_setopt(easy.handle, CURLOPT_URL, url)
     set_ssl_verify(easy, verify_host(url, "ssl"))
+    set_ssh_verify(easy, verify_host(url, "ssh"))
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
 function set_ssl_verify(easy::Easy, verify::Bool)
     @check curl_easy_setopt(easy.handle, CURLOPT_SSL_VERIFYPEER, verify)
     @check curl_easy_setopt(easy.handle, CURLOPT_SSL_VERIFYHOST, verify*2)
+end
+
+function set_ssh_verify(easy::Easy, verify::Bool)
+    if !verify
+        @check curl_easy_setopt(easy.handle, CURLOPT_SSH_KNOWNHOSTS, C_NULL)
+    else
+        file = ssh_known_hosts_file()
+        @check curl_easy_setopt(easy.handle, CURLOPT_SSH_KNOWNHOSTS, file)
+    end
 end
 
 function set_method(easy::Easy, method::Union{String, SubString{String}})
@@ -199,7 +209,7 @@ const PROTOCOL_STATUS = Dict{String,Function}(
 function status_ok(proto::AbstractString, status::Integer)
     test = get(PROTOCOL_STATUS, proto, nothing)
     test !== nothing && return test(status)::Bool
-    error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and checkc the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
+    error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and check the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
 end
 
 function get_effective_url(easy::Easy)
