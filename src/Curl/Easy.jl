@@ -54,7 +54,7 @@ end
 function set_ca_roots_path(easy::Easy, path::AbstractString)
     Base.unsafe_convert(Cstring, path) # error checking
     opt = isdir(path) ? CURLOPT_CAPATH : CURLOPT_CAINFO
-    @check curl_easy_setopt(easy.handle, CURLOPT_CAINFO, path)
+    @check curl_easy_setopt(easy.handle, opt, path)
 end
 
 function set_url(easy::Easy, url::Union{String, SubString{String}})
