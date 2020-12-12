@@ -44,8 +44,14 @@ const SYSTEM_SSL =
     Sys.isapple() && startswith(SSL_VERSION, "SecureTranspart") ||
     Sys.iswindows() && startswith(SSL_VERSION, "Schannel")
 
-const CURL_VERSION = unsafe_string(curl_version())
-const USER_AGENT = "$CURL_VERSION julia/$VERSION"
+const CURL_VERSION_STR = unsafe_string(curl_version())
+let m = match(r"^libcurl/(\d+\.\d+\.\d+)\b", CURL_VERSION_STR)
+    m !== nothing || error("unexpected CURL_VERSION_STR value")
+    curl = m.captures[1]
+    julia = "$(VERSION.major).$(VERSION.minor)"
+    global const CURL_VERSION = VersionNumber(curl)
+    global const USER_AGENT = "curl/$curl julia/$julia"
+end
 
 include("Easy.jl")
 include("Multi.jl")
