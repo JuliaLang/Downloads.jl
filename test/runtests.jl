@@ -2,6 +2,8 @@ include("setup.jl")
 
 @testset "Downloads.jl" begin
     @testset "libcurl configuration" begin
+        julia = "$(VERSION.major).$(VERSION.minor)"
+        @test Curl.USER_AGENT == "curl/$(Curl.CURL_VERSION) julia/$julia"
         if VERSION > v"1.6-"
             @test Curl.SYSTEM_SSL == Sys.iswindows() || Sys.isapple()
         end
@@ -130,24 +132,28 @@ include("setup.jl")
                 @test header(json["headers"], key) == value
             end
             @test header(json["headers"], "Accept") == "*/*"
+            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
         end
 
         @testset "override default header" begin
             headers = ["Accept" => "application/tar"]
             json = download_json(url, headers = headers)
             @test header(json["headers"], "Accept") == "application/tar"
+            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
         end
 
         @testset "override default header with empty value" begin
             headers = ["Accept" => ""]
             json = download_json(url, headers = headers)
             @test header(json["headers"], "Accept") == ""
+            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
         end
 
         @testset "delete default header" begin
             headers = ["Accept" => nothing]
             json = download_json(url, headers = headers)
             @test !("Accept" in keys(json["headers"]))
+            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
         end
     end
 
