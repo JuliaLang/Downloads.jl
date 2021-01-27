@@ -49,6 +49,7 @@ function set_defaults(easy::Easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 50)
     @check curl_easy_setopt(easy.handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
     @check curl_easy_setopt(easy.handle, CURLOPT_USERAGENT, USER_AGENT)
+    @check curl_easy_setopt(easy.handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1)
 end
 
 function set_ca_roots_path(easy::Easy, path::AbstractString)
