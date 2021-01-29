@@ -4,6 +4,7 @@ using Downloads
 using Downloads: download
 using Downloads.Curl
 using Downloads.Curl: contains
+using Base.Experimental: @sync
 
 include("json.jl")
 
