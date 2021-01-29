@@ -164,6 +164,17 @@ include("setup.jl")
             @test !("Accept" in keys(json["headers"]))
             @test !("User-Agent" in keys(json["headers"]))
         end
+
+        @testset "HTTP/2 user agent bug" begin
+            json = download_json(url, verbose = true)
+            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
+            @sync for _ = 1:2
+                @async begin
+                    json = download_json(url, verbose = true)
+                    @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
+                end
+            end
+        end
     end
 
     @testset "file protocol" begin
