@@ -63,4 +63,9 @@ function with_handle(f, handle::Union{Multi, Easy})
     end
 end
 
+setopt(easy::Easy, option::Integer, value) =
+    @check curl_easy_setopt(easy.handle, option, value)
+setopt(multi::Multi, option::Integer, value) =
+    @check curl_multi_setopt(multi.handle, option, value)
+
 end # module

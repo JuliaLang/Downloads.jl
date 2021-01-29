@@ -44,66 +44,66 @@ end
 
 function set_defaults(easy::Easy)
     # curl options
-    @check curl_easy_setopt(easy.handle, CURLOPT_NOSIGNAL, true)
-    @check curl_easy_setopt(easy.handle, CURLOPT_FOLLOWLOCATION, true)
-    @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 50)
-    @check curl_easy_setopt(easy.handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
-    @check curl_easy_setopt(easy.handle, CURLOPT_USERAGENT, USER_AGENT)
-    @check curl_easy_setopt(easy.handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1)
+    setopt(easy, CURLOPT_NOSIGNAL, true)
+    setopt(easy, CURLOPT_FOLLOWLOCATION, true)
+    setopt(easy, CURLOPT_MAXREDIRS, 50)
+    setopt(easy, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
+    setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
+    setopt(easy, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1)
     # ssh-related options
-    @check curl_easy_setopt(easy.handle, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
-    @check curl_easy_setopt(easy.handle, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
+    setopt(easy, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
+    setopt(easy, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
     key_pass = something(ssh_key_pass(), C_NULL)
-    @check curl_easy_setopt(easy.handle, CURLOPT_KEYPASSWD, ssh_pub_key_path())
+    setopt(easy, CURLOPT_KEYPASSWD, ssh_pub_key_path())
 end
 
 function set_ca_roots_path(easy::Easy, path::AbstractString)
     Base.unsafe_convert(Cstring, path) # error checking
     opt = isdir(path) ? CURLOPT_CAPATH : CURLOPT_CAINFO
-    @check curl_easy_setopt(easy.handle, opt, path)
+    setopt(easy, opt, path)
 end
 
 function set_url(easy::Easy, url::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, url) # error checking
-    @check curl_easy_setopt(easy.handle, CURLOPT_URL, url)
+    setopt(easy, CURLOPT_URL, url)
     set_ssl_verify(easy, verify_host(url, "ssl"))
     set_ssh_verify(easy, verify_host(url, "ssh"))
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
 function set_ssl_verify(easy::Easy, verify::Bool)
-    @check curl_easy_setopt(easy.handle, CURLOPT_SSL_VERIFYPEER, verify)
-    @check curl_easy_setopt(easy.handle, CURLOPT_SSL_VERIFYHOST, verify*2)
+    setopt(easy, CURLOPT_SSL_VERIFYPEER, verify)
+    setopt(easy, CURLOPT_SSL_VERIFYHOST, verify*2)
 end
 
 function set_ssh_verify(easy::Easy, verify::Bool)
     if !verify
-        @check curl_easy_setopt(easy.handle, CURLOPT_SSH_KNOWNHOSTS, C_NULL)
+        setopt(easy, CURLOPT_SSH_KNOWNHOSTS, C_NULL)
     else
         file = ssh_known_hosts_file()
-        @check curl_easy_setopt(easy.handle, CURLOPT_SSH_KNOWNHOSTS, file)
+        setopt(easy, CURLOPT_SSH_KNOWNHOSTS, file)
     end
 end
 
 function set_method(easy::Easy, method::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, method) # error checking
-    @check curl_easy_setopt(easy.handle, CURLOPT_CUSTOMREQUEST, method)
+    setopt(easy, CURLOPT_CUSTOMREQUEST, method)
 end
 set_method(easy::Easy, method::AbstractString) = set_method(easy, String(method))
 
 function set_verbose(easy::Easy, verbose::Bool)
-    @check curl_easy_setopt(easy.handle, CURLOPT_VERBOSE, verbose)
+    setopt(easy, CURLOPT_VERBOSE, verbose)
 end
 
 function set_body(easy::Easy, body::Bool)
-    @check curl_easy_setopt(easy.handle, CURLOPT_NOBODY, !body)
+    setopt(easy, CURLOPT_NOBODY, !body)
 end
 
 function set_upload_size(easy::Easy, size::Integer)
     opt = Sys.WORD_SIZE ≥ 64 ? CURLOPT_INFILESIZE_LARGE : CURLOPT_INFILESIZE
-    @check curl_easy_setopt(easy.handle, opt, size)
+    setopt(easy, opt, size)
 end
 
 function set_seeker(seeker::Function, easy::Easy)
@@ -116,10 +116,10 @@ function set_timeout(easy::Easy, timeout::Real)
         throw(ArgumentError("timeout must be positive, got $timeout"))
     if timeout ≤ typemax(Clong) ÷ 1000
         timeout_ms = round(Clong, timeout * 1000)
-        @check curl_easy_setopt(easy.handle, CURLOPT_TIMEOUT_MS, timeout_ms)
+        setopt(easy, CURLOPT_TIMEOUT_MS, timeout_ms)
     else
         timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
-        @check curl_easy_setopt(easy.handle, CURLOPT_TIMEOUT, timeout)
+        setopt(easy, CURLOPT_TIMEOUT, timeout)
     end
 end
 
@@ -127,7 +127,7 @@ function add_header(easy::Easy, hdr::Union{String, SubString{String}})
     # TODO: ideally, Clang would generate Cstring signatures
     Base.unsafe_convert(Cstring, hdr) # error checking
     easy.req_hdrs = curl_slist_append(easy.req_hdrs, hdr)
-    @check curl_easy_setopt(easy.handle, CURLOPT_HTTPHEADER, easy.req_hdrs)
+    setopt(easy, CURLOPT_HTTPHEADER, easy.req_hdrs)
 end
 
 add_header(easy::Easy, hdr::AbstractString) = add_header(easy, string(hdr)::String)
@@ -146,12 +146,12 @@ function add_headers(easy::Easy, headers::Union{AbstractVector, AbstractDict})
 end
 
 function enable_progress(easy::Easy, on::Bool=true)
-    @check curl_easy_setopt(easy.handle, CURLOPT_NOPROGRESS, !on)
+    setopt(easy, CURLOPT_NOPROGRESS, !on)
 end
 
 function enable_upload(easy::Easy)
     add_upload_callbacks(easy::Easy)
-    @check curl_easy_setopt(easy.handle, CURLOPT_UPLOAD, true)
+    setopt(easy, CURLOPT_UPLOAD, true)
 end
 
 # response info
@@ -366,29 +366,29 @@ end
 function add_callbacks(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
-    @check curl_easy_setopt(easy.handle, CURLOPT_PRIVATE, easy_p)
+    setopt(easy, CURLOPT_PRIVATE, easy_p)
 
     # pointer to error buffer
     errbuf_p = pointer(easy.errbuf)
-    @check curl_easy_setopt(easy.handle, CURLOPT_ERRORBUFFER, errbuf_p)
+    setopt(easy, CURLOPT_ERRORBUFFER, errbuf_p)
 
     # set header callback
     header_cb = @cfunction(header_callback,
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
-    @check curl_easy_setopt(easy.handle, CURLOPT_HEADERFUNCTION, header_cb)
-    @check curl_easy_setopt(easy.handle, CURLOPT_HEADERDATA, easy_p)
+    setopt(easy, CURLOPT_HEADERFUNCTION, header_cb)
+    setopt(easy, CURLOPT_HEADERDATA, easy_p)
 
     # set write callback
     write_cb = @cfunction(write_callback,
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
-    @check curl_easy_setopt(easy.handle, CURLOPT_WRITEFUNCTION, write_cb)
-    @check curl_easy_setopt(easy.handle, CURLOPT_WRITEDATA, easy_p)
+    setopt(easy, CURLOPT_WRITEFUNCTION, write_cb)
+    setopt(easy, CURLOPT_WRITEDATA, easy_p)
 
     # set progress callback
     progress_cb = @cfunction(progress_callback,
         Cint, (Ptr{Cvoid}, curl_off_t, curl_off_t, curl_off_t, curl_off_t))
-    @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFOFUNCTION, progress_cb)
-    @check curl_easy_setopt(easy.handle, CURLOPT_XFERINFODATA, easy_p)
+    setopt(easy, CURLOPT_XFERINFOFUNCTION, progress_cb)
+    setopt(easy, CURLOPT_XFERINFODATA, easy_p)
 end
 
 function add_upload_callbacks(easy::Easy)
@@ -398,8 +398,8 @@ function add_upload_callbacks(easy::Easy)
     # set read callback
     read_cb = @cfunction(read_callback,
         Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
-    @check curl_easy_setopt(easy.handle, CURLOPT_READFUNCTION, read_cb)
-    @check curl_easy_setopt(easy.handle, CURLOPT_READDATA, easy_p)
+    setopt(easy, CURLOPT_READFUNCTION, read_cb)
+    setopt(easy, CURLOPT_READDATA, easy_p)
 end
 
 function add_seek_callbacks(easy::Easy)
@@ -409,6 +409,6 @@ function add_seek_callbacks(easy::Easy)
     # set seek callback
     seek_cb = @cfunction(seek_callback,
         Cint, (Ptr{Cvoid}, curl_off_t, Cint))
-    @check curl_easy_setopt(easy.handle, CURLOPT_SEEKFUNCTION, seek_cb)
-    @check curl_easy_setopt(easy.handle, CURLOPT_SEEKDATA, easy_p)
+    setopt(easy, CURLOPT_SEEKFUNCTION, seek_cb)
+    setopt(easy, CURLOPT_SEEKDATA, easy_p)
 end

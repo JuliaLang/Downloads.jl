@@ -204,12 +204,12 @@ function add_callbacks(multi::Multi)
 
     # set timer callback
     timer_cb = @cfunction(timer_callback, Cint, (Ptr{Cvoid}, Clong, Ptr{Cvoid}))
-    @check curl_multi_setopt(multi.handle, CURLMOPT_TIMERFUNCTION, timer_cb)
-    @check curl_multi_setopt(multi.handle, CURLMOPT_TIMERDATA, multi_p)
+    setopt(multi, CURLMOPT_TIMERFUNCTION, timer_cb)
+    setopt(multi, CURLMOPT_TIMERDATA, multi_p)
 
     # set socket callback
     socket_cb = @cfunction(socket_callback,
         Cint, (Ptr{Cvoid}, curl_socket_t, Cint, Ptr{Cvoid}, Ptr{Cvoid}))
-    @check curl_multi_setopt(multi.handle, CURLMOPT_SOCKETFUNCTION, socket_cb)
-    @check curl_multi_setopt(multi.handle, CURLMOPT_SOCKETDATA, multi_p)
+    setopt(multi, CURLMOPT_SOCKETFUNCTION, socket_cb)
+    setopt(multi, CURLMOPT_SOCKETDATA, multi_p)
 end
