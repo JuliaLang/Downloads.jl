@@ -49,11 +49,12 @@ function set_defaults(easy::Easy)
     @check curl_easy_setopt(easy.handle, CURLOPT_MAXREDIRS, 50)
     @check curl_easy_setopt(easy.handle, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
     @check curl_easy_setopt(easy.handle, CURLOPT_USERAGENT, USER_AGENT)
-    # github's HTTP/2 handling is buggy, so just don't for now
     @check curl_easy_setopt(easy.handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1)
-    # if the server transmits nothing for 20s, just bail out
-    @check curl_easy_setopt(easy.handle, CURLOPT_LOW_SPEED_LIMIT, 1)
-    @check curl_easy_setopt(easy.handle, CURLOPT_LOW_SPEED_TIME, 20)
+    # ssh-related options
+    @check curl_easy_setopt(easy.handle, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
+    @check curl_easy_setopt(easy.handle, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
+    key_pass = something(ssh_key_pass(), C_NULL)
+    @check curl_easy_setopt(easy.handle, CURLOPT_KEYPASSWD, ssh_pub_key_path())
 end
 
 function set_ca_roots_path(easy::Easy, path::AbstractString)
