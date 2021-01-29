@@ -136,24 +136,33 @@ include("setup.jl")
         end
 
         @testset "override default header" begin
-            headers = ["Accept" => "application/tar"]
+            headers = [
+                "Accept"     => "application/tar"
+                "User-Agent" => "MyUserAgent/1.0"
+            ]
             json = download_json(url, headers = headers)
             @test header(json["headers"], "Accept") == "application/tar"
-            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
+            @test header(json["headers"], "User-Agent") == "MyUserAgent/1.0"
         end
 
         @testset "override default header with empty value" begin
-            headers = ["Accept" => ""]
+            headers = [
+                "Accept"     => ""
+                "User-Agent" => ""
+            ]
             json = download_json(url, headers = headers)
             @test header(json["headers"], "Accept") == ""
-            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
+            @test header(json["headers"], "User-Agent") == ""
         end
 
         @testset "delete default header" begin
-            headers = ["Accept" => nothing]
-            json = download_json(url, headers = headers)
+        headers = [
+            "Accept"     => nothing
+            "User-Agent" => nothing
+        ]
+        json = download_json(url, headers = headers)
             @test !("Accept" in keys(json["headers"]))
-            @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
+            @test !("User-Agent" in keys(json["headers"]))
         end
     end
 

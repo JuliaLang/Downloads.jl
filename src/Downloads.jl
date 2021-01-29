@@ -301,6 +301,14 @@ function request(
                 set_timeout(easy, timeout)
                 set_verbose(easy, verbose)
                 add_headers(easy, headers)
+
+                # libcurl does not set the default header reliably so set it
+                # explicitly unless user has specified it, xref
+                # https://github.com/JuliaLang/Pkg.jl/pull/2357
+                if !any(kv -> lowercase(kv[1]) == "user-agent", headers)
+                    Curl.add_header(easy, "User-Agent", Curl.USER_AGENT)
+                end
+
                 if have_input
                     enable_upload(easy)
                     if input_size !== nothing
