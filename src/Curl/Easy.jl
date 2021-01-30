@@ -157,7 +157,8 @@ end
 
 function get_protocol(easy::Easy)
     proto_ref = Ref{Clong}()
-    @check curl_easy_getinfo(easy.handle, CURLINFO_PROTOCOL, proto_ref)
+    r = @check curl_easy_getinfo(easy.handle, CURLINFO_PROTOCOL, proto_ref)
+    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or us a Julia build that uses its own `libcurl` library.")
     proto = proto_ref[]
     proto == CURLPROTO_DICT   && return "dict"
     proto == CURLPROTO_FILE   && return "file"
@@ -216,6 +217,7 @@ function status_ok(proto::AbstractString, status::Integer)
     test !== nothing && return test(status)::Bool
     error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and check the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
 end
+status_ok(proto::Nothing, status::Integer) = false
 
 function get_effective_url(easy::Easy)
     url_ref = Ref{Ptr{Cchar}}()

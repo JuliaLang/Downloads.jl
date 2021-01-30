@@ -34,7 +34,7 @@ function check(ex::Expr, lock::Bool)
     quote
         r = $ex
         iszero(r) || @async @error($prefix * string(r))
-        nothing
+        r
     end
 end
 
