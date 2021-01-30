@@ -166,11 +166,11 @@ include("setup.jl")
         end
 
         @testset "HTTP/2 user agent bug" begin
-            json = download_json(url, verbose = true)
+            json = download_json(url)
             @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
             @sync for _ = 1:2
                 @async begin
-                    json = download_json(url, verbose = true)
+                    json = download_json(url)
                     @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
                 end
             end
