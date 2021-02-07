@@ -49,6 +49,7 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_MAXREDIRS, 50)
     setopt(easy, CURLOPT_POSTREDIR, CURL_REDIR_POST_ALL)
     setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
+    setopt(easy, CURLOPT_ACCEPT_ENCODING, "")
     # ssh-related options
     setopt(easy, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
     setopt(easy, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
