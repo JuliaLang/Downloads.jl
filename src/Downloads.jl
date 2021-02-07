@@ -192,7 +192,7 @@ remains zero until the server gives an indiation of the total size of the
 download (e.g. with a `Content-Length` header), which may never happen. So a
 well-behaved progress callback should handle a total size of zero gracefully.
 
-If the `verbose` optoin is set to true, `libcurl`, which is used to implement
+If the `verbose` option is set to true, `libcurl`, which is used to implement
 the download functionality will print debugging information to `stderr`.
 """
 function download(
