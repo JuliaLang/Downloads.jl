@@ -55,7 +55,7 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
     setopt(easy, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
     key_pass = something(ssh_key_pass(), C_NULL)
-    setopt(easy, CURLOPT_KEYPASSWD, ssh_pub_key_path())
+    setopt(easy, CURLOPT_KEYPASSWD, key_pass)
 end
 
 function set_ca_roots_path(easy::Easy, path::AbstractString)
