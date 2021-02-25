@@ -43,7 +43,13 @@ end
 function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         isempty(multi.easies) && preserve_handle(multi)
-        multi.handle == C_NULL && init!(multi)
+        if multi.handle == C_NULL
+            init!(multi)
+        else
+            # if reusing a multi, it's possible we had queued up a cleanup of the handle.
+            # stop that timer so that we don't accidentaly clean up during another download.
+            uv_timer_stop(multi.timer)
+        end
         push!(multi.easies, easy)
         @check curl_multi_add_handle(multi.handle, easy.handle)
     end
