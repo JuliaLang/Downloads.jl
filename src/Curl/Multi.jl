@@ -18,7 +18,7 @@ mutable struct Multi
 end
 
 function init!(multi::Multi)
-    uv_timer_stop(multi.timer)
+    multi.handle != C_NULL && return
     multi.handle = curl_multi_init()
     add_callbacks(multi)
     set_defaults(multi)
@@ -42,9 +42,12 @@ end
 
 function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
-        isempty(multi.easies) && preserve_handle(multi)
-        multi.handle == C_NULL && init!(multi)
+        if isempty(multi.easies)
+            preserve_handle(multi)
+            uv_timer_stop(multi.timer) # stop grace timer
+        end
         push!(multi.easies, easy)
+        init!(multi)
         @check curl_multi_add_handle(multi.handle, easy.handle)
     end
 end

@@ -421,6 +421,12 @@ include("setup.jl")
         head = String(read!(open(file), Vector{UInt8}(undef, 16)))
         @test head == "\x1f\x8b\b\0\xa5T.\\\x02\x03\xec]{s۶"
     end
+
+    @testset "grace cleanup" begin
+        dl = Downloader(grace=1)
+        Downloads.download("https://httpbingo.org/drip"; downloader=dl)
+        Downloads.download("https://httpbingo.org/drip"; downloader=dl)
+    end
 end
 
 Downloads.DOWNLOADER[] = nothing
