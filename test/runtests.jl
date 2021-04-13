@@ -201,7 +201,8 @@ include("setup.jl")
 
         # Setup .netrc
         servername = split(server, "/")[end]  # strip https://
-        open(".netrc", "w") do io
+        netrc = tempname()
+        open(netrc, "w") do io
             write(io, "machine $servername login user password passwd\n")
         end
 
@@ -210,7 +211,7 @@ include("setup.jl")
         easy_hook = (easy, info) -> begin
             Downloads.Curl.setopt(
                 easy,
-                Downloads.Curl.CURLOPT_NETRC_FILE, joinpath(@__DIR__, ".netrc"))
+                Downloads.Curl.CURLOPT_NETRC_FILE, joinpath(@__DIR__, netrc))
         end
         downloader.easy_hook = easy_hook
 
@@ -219,7 +220,7 @@ include("setup.jl")
         @test resp.status == 200  # succesful authentication
 
         # Cleanup
-        rm(".netrc")
+        rm(netrc)  # isn't cleaned automatically on Julia 1.3
     end
 
     @testset "file protocol" begin
