@@ -214,7 +214,7 @@ include("setup.jl")
         end
         downloader.easy_hook = easy_hook
 
-        resp = request(auth_url, throw=false; downloader)
+        resp = request(auth_url, throw=false, downloader=downloader)
         @test resp isa Response
         @test resp.status == 200  # succesful authentication
 
