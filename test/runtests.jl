@@ -182,7 +182,7 @@ include("setup.jl")
 
         # This url will redirect to /cookies, which echoes the set cookies as json
         set_cookie_url = "$server/cookies/set?k1=v1&k2=v2"
-        cookies = download_json(set_cookie_url, downloader=downloader, verbose=true)
+        cookies = download_json(set_cookie_url, downloader=downloader)
         @test get(cookies, "k1", "") == "v1"
         @test get(cookies, "k2", "") == "v2"
 
