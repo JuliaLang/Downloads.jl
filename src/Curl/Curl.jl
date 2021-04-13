@@ -41,7 +41,7 @@ end
 const CURL_VERSION_INFO = unsafe_load(curl_version_info(CURLVERSION_NOW))
 const SSL_VERSION = unsafe_string(CURL_VERSION_INFO.ssl_version)
 const SYSTEM_SSL =
-    Sys.isapple() && startswith(SSL_VERSION, "SecureTranspart") ||
+    Sys.isapple() && startswith(SSL_VERSION, "SecureTransport") ||
     Sys.iswindows() && startswith(SSL_VERSION, "Schannel")
 
 const CURL_VERSION_STR = unsafe_string(curl_version())
