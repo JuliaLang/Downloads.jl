@@ -211,7 +211,7 @@ include("setup.jl")
         easy_hook = (easy, info) -> begin
             Downloads.Curl.setopt(
                 easy,
-                Downloads.Curl.CURLOPT_NETRC_FILE, joinpath(@__DIR__, netrc))
+                Downloads.Curl.CURLOPT_NETRC_FILE, netrc)
         end
         downloader.easy_hook = easy_hook
 
