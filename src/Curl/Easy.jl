@@ -51,13 +51,12 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
     setopt(easy, CURLOPT_NETRC, CURL_NETRC_OPTIONAL)
     setopt(easy, CURLOPT_COOKIEFILE, "")
-    # Something is broken with HTTP/2 so disable for now (#94, #95)
-    setopt(easy, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1)
+
     # ssh-related options
     setopt(easy, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
     setopt(easy, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
     key_pass = something(ssh_key_pass(), C_NULL)
-    setopt(easy, CURLOPT_KEYPASSWD, ssh_pub_key_path())
+    setopt(easy, CURLOPT_KEYPASSWD, key_pass)
 end
 
 function set_ca_roots_path(easy::Easy, path::AbstractString)

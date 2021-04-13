@@ -5,7 +5,7 @@ include("setup.jl")
         julia = "$(VERSION.major).$(VERSION.minor)"
         @test Curl.USER_AGENT == "curl/$(Curl.CURL_VERSION) julia/$julia"
         if VERSION > v"1.6-"
-            @test Curl.SYSTEM_SSL == Sys.iswindows() || Sys.isapple()
+            @test Curl.SYSTEM_SSL == Sys.iswindows() | Sys.isapple()
         end
     end
 
@@ -175,6 +175,51 @@ include("setup.jl")
                 end
             end
         end
+    end
+
+    @testset "session support" begin
+        downloader = Downloader()
+
+        # This url will redirect to /cookies, which echoes the set cookies as json
+        set_cookie_url = "$server/cookies/set?k1=v1&k2=v2"
+        cookies = download_json(set_cookie_url, downloader=downloader, verbose=true)
+        @test get(cookies, "k1", "") == "v1"
+        @test get(cookies, "k2", "") == "v2"
+
+        # As the handle is destroyed, subsequent requests have no cookies
+        cookie_url = "$server/cookies"
+        cookies = download_json(cookie_url, downloader=downloader)
+        @test isempty(cookies)
+    end
+
+    @testset "netrc support" begin
+
+        auth_url = "$server/basic-auth/user/passwd"
+        resp = request(auth_url)
+        @test resp isa Response
+        @test resp.status == 401  # no succesful authentication
+
+        # Setup .netrc
+        servername = split(server, "/")[end]  # strip https://
+        open(".netrc", "w") do io
+            write(io, "machine $servername login user password passwd\n")
+        end
+
+        # Setup config to point to custom .netrc (normally in ~/.netrc)
+        downloader = Downloads.Downloader()
+        easy_hook = (easy, info) -> begin
+            Downloads.Curl.setopt(
+                easy,
+                Downloads.Curl.CURLOPT_NETRC_FILE, joinpath(@__DIR__, ".netrc"))
+        end
+        downloader.easy_hook = easy_hook
+
+        resp = request(auth_url, throw=false; downloader)
+        @test resp isa Response
+        @test resp.status == 200  # succesful authentication
+
+        # Cleanup
+        rm(".netrc")
     end
 
     @testset "file protocol" begin
@@ -420,6 +465,12 @@ include("setup.jl")
         @test filesize(file) == 3444093
         head = String(read!(open(file), Vector{UInt8}(undef, 16)))
         @test head == "\x1f\x8b\b\0\xa5T.\\\x02\x03\xec]{s۶"
+    end
+
+    @testset "grace cleanup" begin
+        dl = Downloader(grace=1)
+        Downloads.download("https://httpbingo.org/drip"; downloader=dl)
+        Downloads.download("https://httpbingo.org/drip"; downloader=dl)
     end
 end
 
