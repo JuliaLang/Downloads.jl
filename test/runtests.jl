@@ -5,7 +5,7 @@ include("setup.jl")
         julia = "$(VERSION.major).$(VERSION.minor)"
         @test Curl.USER_AGENT == "curl/$(Curl.CURL_VERSION) julia/$julia"
         if VERSION > v"1.6-"
-            @test Curl.SYSTEM_SSL == Sys.iswindows() || Sys.isapple()
+            @test Curl.SYSTEM_SSL == Sys.iswindows() | Sys.isapple()
         end
     end
 
