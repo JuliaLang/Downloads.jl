@@ -193,34 +193,31 @@ include("setup.jl")
     end
 
     @testset "netrc support" begin
-
-        auth_url = "$server/basic-auth/user/passwd"
+        user = "gVvkQiHN62"
+        passwd = "dlctfSMTno8n"
+        auth_url = "$server/basic-auth/$user/$passwd"
         resp = request(auth_url)
         @test resp isa Response
         @test resp.status == 401  # no succesful authentication
 
         # Setup .netrc
-        servername = split(server, "/")[end]  # strip https://
+        hostname = match(r"^\w+://([^/]+)"i, server).captures[1]
         netrc = tempname()
         open(netrc, "w") do io
-            write(io, "machine $servername login user password passwd\n")
+            write(io, "machine $hostname login $user password $passwd\n")
         end
 
         # Setup config to point to custom .netrc (normally in ~/.netrc)
         downloader = Downloads.Downloader()
-        easy_hook = (easy, info) -> begin
-            Downloads.Curl.setopt(
-                easy,
-                Downloads.Curl.CURLOPT_NETRC_FILE, netrc)
-        end
-        downloader.easy_hook = easy_hook
+        downloader.easy_hook = (easy, info) ->
+            Curl.setopt(easy, Curl.CURLOPT_NETRC_FILE, netrc)
 
         resp = request(auth_url, throw=false, downloader=downloader)
         @test resp isa Response
         @test resp.status == 200  # succesful authentication
 
         # Cleanup
-        rm(netrc)  # isn't cleaned automatically on Julia 1.3
+        rm(netrc)
     end
 
     @testset "file protocol" begin
