@@ -177,6 +177,52 @@ include("setup.jl")
         end
     end
 
+    @testset "session support" begin
+        downloader = Downloader()
+
+        # This url will redirect to /cookies, which echoes the set cookies as json
+        set_cookie_url = "$server/cookies/set?k1=v1&k2=v2"
+        cookies = download_json(set_cookie_url, downloader=downloader)
+        @test get(cookies, "k1", "") == "v1"
+        @test get(cookies, "k2", "") == "v2"
+
+        # As the handle is destroyed, subsequent requests have no cookies
+        cookie_url = "$server/cookies"
+        cookies = download_json(cookie_url, downloader=downloader)
+        @test isempty(cookies)
+    end
+
+    @testset "netrc support" begin
+
+        auth_url = "$server/basic-auth/user/passwd"
+        resp = request(auth_url)
+        @test resp isa Response
+        @test resp.status == 401  # no succesful authentication
+
+        # Setup .netrc
+        servername = split(server, "/")[end]  # strip https://
+        netrc = tempname()
+        open(netrc, "w") do io
+            write(io, "machine $servername login user password passwd\n")
+        end
+
+        # Setup config to point to custom .netrc (normally in ~/.netrc)
+        downloader = Downloads.Downloader()
+        easy_hook = (easy, info) -> begin
+            Downloads.Curl.setopt(
+                easy,
+                Downloads.Curl.CURLOPT_NETRC_FILE, netrc)
+        end
+        downloader.easy_hook = easy_hook
+
+        resp = request(auth_url, throw=false, downloader=downloader)
+        @test resp isa Response
+        @test resp.status == 200  # succesful authentication
+
+        # Cleanup
+        rm(netrc)  # isn't cleaned automatically on Julia 1.3
+    end
+
     @testset "file protocol" begin
         @testset "success" begin
             path = tempname()
