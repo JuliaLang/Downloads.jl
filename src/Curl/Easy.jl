@@ -76,7 +76,6 @@ set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
 function set_ssl_verify(easy::Easy, verify::Bool)
     setopt(easy, CURLOPT_SSL_VERIFYPEER, verify)
-    setopt(easy, CURLOPT_SSL_VERIFYHOST, verify*2)
 end
 
 function set_ssh_verify(easy::Easy, verify::Bool)
