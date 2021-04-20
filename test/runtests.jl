@@ -360,13 +360,14 @@ include("setup.jl")
         end
     end
 
+    save_env = get(ENV, "JULIA_SSL_NO_VERIFY_HOSTS", nothing)
+    delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
+
     @testset "bad TLS" begin
-        save_env = get(ENV, "JULIA_SSL_NO_VERIFY_HOSTS", nothing)
         urls = [
             "https://wrong.host.badssl.com"
             "https://untrusted-root.badssl.com"
         ]
-        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = nothing
         @testset "bad TLS is rejected" for url in urls
             resp = request(url, throw=false)
             @test resp isa RequestError
@@ -406,11 +407,13 @@ include("setup.jl")
             @test resp isa Response
             @test resp.status == 200
         end
-        if save_env !== nothing
-            ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = save_env
-        else
-            delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
-        end
+        delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
+    end
+
+    if save_env !== nothing
+        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = save_env
+    else
+        delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
     end
 
     @__MODULE__() == Main && @testset "ftp download" begin
