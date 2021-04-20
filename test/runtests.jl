@@ -410,6 +410,19 @@ include("setup.jl")
         delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
     end
 
+    @testset "SNI required" begin
+        url = "https://juliahub.com" # anything served by CloudFront
+        # secure verified host request
+        resp = request(url, throw=false, downloader=Downloader())
+        @test resp isa Response
+        @test resp.status == 200
+        # insecure unverified host request
+        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**"
+        resp = request(url, throw=false, downloader=Downloader())
+        @test resp isa Response
+        @test resp.status == 200
+    end
+
     if save_env !== nothing
         ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = save_env
     else
