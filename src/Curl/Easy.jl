@@ -51,6 +51,7 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
     setopt(easy, CURLOPT_NETRC, CURL_NETRC_OPTIONAL)
     setopt(easy, CURLOPT_COOKIEFILE, "")
+    setopt(easy, CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT)
 
     # ssh-related options
     setopt(easy, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
