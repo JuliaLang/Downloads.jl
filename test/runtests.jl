@@ -414,10 +414,7 @@ include("setup.jl")
         @testset "bad TLS is rejected" for url in urls
             resp = request(url, throw=false)
             @test resp isa RequestError
-            # FIXME: we should use Curl.CURLE_PEER_FAILED_VERIFICATION
-            # but LibCURL has gotten out of sync with curl and some
-            # of the constants are no longer correct; this is one
-            @test resp.code == 60
+            @test resp.code == Curl.CURLE_PEER_FAILED_VERIFICATION
         end
         @testset "easy hook work-around" begin
             local url
