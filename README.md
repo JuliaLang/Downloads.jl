@@ -104,7 +104,7 @@ Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
 reponse is written to `output` if specified and discarded otherwise. For HTTP/S
 requests, if an `input` stream is given, a `PUT` request is made; otherwise if
-an `output` stream is givven, a `GET` request is made; if neither is given a
+an `output` stream is given, a `GET` request is made; if neither is given a
 `HEAD` request is made. For other protocols, appropriate default methods are
 used based on what combination of input and output are requested. The following
 options differ from the `download` function:
