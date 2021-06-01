@@ -51,6 +51,13 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_USERAGENT, USER_AGENT)
     setopt(easy, CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT)
 
+    # prevent downloads that hang forever:
+    # - timeout no response on connect (more than 30s)
+    # - if server transmits nothing for 20s, bail out
+    setopt(easy, CURLOPT_CONNECTTIMEOUT, 30)
+    setopt(easy, CURLOPT_LOW_SPEED_TIME, 20)
+    setopt(easy, CURLOPT_LOW_SPEED_LIMIT, 1)
+
     # ssh-related options
     setopt(easy, CURLOPT_SSH_PRIVATE_KEYFILE, ssh_key_path())
     setopt(easy, CURLOPT_SSH_PUBLIC_KEYFILE, ssh_pub_key_path())
