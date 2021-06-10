@@ -218,7 +218,10 @@ function download(
     verbose    :: Bool = false,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
-    arg_write(output) do output
+    #only relocate when output is originally empty
+    do_reloc = isnothing(output) 
+    local response
+    res = arg_write(output) do output
         response = request(
             url,
             output = output,
@@ -229,9 +232,41 @@ function download(
             verbose = verbose,
             downloader = downloader,
         )
-        status_ok(response.proto, response.status) && return output
-        throw(RequestError(url, Curl.CURLE_OK, "", response))
+        status_ok(response.proto, response.status) || throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
+    # get file suffix right based on headers
+    if do_reloc && ispath(res)
+        for _pair in response.headers
+            if _pair.first == "content-disposition"
+                res = _relocate(res, _pair)
+                do_reloc = false
+            end
+        end
+
+        # add suffix based on url if header wasn't helpful
+        if do_reloc
+            ext = splitext(response.url)
+            mv(res, res*ext)
+            res = res*ext
+        end
+    end
+    res
+end
+
+function _relocate(path::AbstractString, _pair)
+    m = match(r"""filename\*?=(.+|".+")""", _pair.second)
+    if !isnothing(m)
+        filename = strip(first(m.captures), '"')
+
+        parts = splitpath(path)
+        parts[lastindex(parts)] = filename
+
+        newpath = joinpath(parts)
+        # updating files in /tmp/ is likely desired
+        mv(path, newpath; force=true)
+        path = newpath
+    end
+    path
 end
 
 ## request API ##
