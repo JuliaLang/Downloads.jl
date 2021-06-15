@@ -244,7 +244,7 @@ function download(
 
         # add suffix based on url if header wasn't helpful
         if do_reloc
-            ext = splitext(response.url)
+            ext = last(splitext(response.url))
             if !isempty(ext)
                 mv(res, res*ext)
                 res = res*ext
