@@ -265,10 +265,10 @@ function _relocate(path::AbstractString, _pair)
         newpath = joinpath(parts)
         # updating files in /tmp/ is likely desired
         mv(path, newpath; force=true)
-        return newpath, true
+        return newpath, false
     end
-    # if didn't find `filename=` in the header
-    path, false
+    # if didn't find `filename=` in the header, keep do_reloc
+    path, true
 end
 
 ## request API ##
