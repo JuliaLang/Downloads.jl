@@ -262,7 +262,7 @@ function _relocate(path::AbstractString, _pair)
         parts = splitpath(path)
         parts[lastindex(parts)] = filename
 
-        newpath = joinpath(parts)
+        newpath = joinpath(parts...)
         # updating files in /tmp/ is likely desired
         mv(path, newpath; force=true)
         return newpath, false
