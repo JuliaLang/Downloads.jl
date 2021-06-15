@@ -218,7 +218,7 @@ function download(
     verbose    :: Bool = false,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
-    #only relocate when output is originally empty
+    #only relocate when `output` was originally `nothing`
     do_reloc = isnothing(output) 
     local response
     res = arg_write(output) do output
@@ -242,7 +242,7 @@ function download(
             end
         end
 
-        # add suffix based on url if header wasn't helpful
+        # add extension based on url if header wasn't helpful
         if do_reloc
             ext = last(splitext(response.url))
             if !isempty(ext)

@@ -25,7 +25,7 @@ include("setup.jl")
         @test value == read(path, String)
         rm(path)
 
-        @testset "Download relocation suffix" begin
+        @testset "Download with auto extension" begin
             url_CD = "$server/response-headers?Content-Disposition="
             path = download("$(url_CD)filename%3DJulia.jpg")
             @test isfile(path)
@@ -38,6 +38,10 @@ include("setup.jl")
             path = download("$server/robots.txt")
             @test isfile(path)
             @test endswith(path, ".txt")
+            rm(path)
+            path = download(server)
+            # response.url protects against adding domain as extension
+            @test !endswith(path, "org")
             rm(path)
         end
         # test with two arguments
