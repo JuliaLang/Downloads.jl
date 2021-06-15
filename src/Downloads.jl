@@ -238,8 +238,7 @@ function download(
     if do_reloc && ispath(res)
         for _pair in response.headers
             if _pair.first == "content-disposition"
-                res = _relocate(res, _pair)
-                do_reloc = false
+                res, do_reloc = _relocate(res, _pair)
             end
         end
 
@@ -266,9 +265,10 @@ function _relocate(path::AbstractString, _pair)
         newpath = joinpath(parts)
         # updating files in /tmp/ is likely desired
         mv(path, newpath; force=true)
-        path = newpath
+        return newpath, true
     end
-    path
+    # if didn't find `filename=` in the header
+    path, false
 end
 
 ## request API ##
