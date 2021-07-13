@@ -333,7 +333,7 @@ function request(
                         end
                     end
                 else
-                    set_body(easy, have_output)
+                    set_body(easy, have_output && method != "HEAD")
                 end
                 method !== nothing && set_method(easy, method)
                 progress !== nothing && enable_progress(easy)
