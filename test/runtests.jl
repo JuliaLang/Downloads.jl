@@ -61,6 +61,24 @@ include("setup.jl")
         @test resp.status == 200
     end
 
+    # https://github.com/JuliaLang/Downloads.jl/issues/131
+    @testset "head request" begin
+        url = server * "/image/jpeg"
+        output = IOBuffer()
+        resp = request(url; method="HEAD", output=output)
+        @test resp isa Response
+        @test resp.proto == "https"
+        @test resp.status == 200
+        @test isempty(take!(output)) # no output from a `HEAD`
+        len = parse(Int, Dict(resp.headers)["content-length"])
+
+        # when we make a `GET` instead of a `HEAD`, we get a body with the content-length
+        # returned from the `HEAD` request.
+        resp = request(url; method="GET", output=output)
+        bytes = take!(output)
+        @test length(bytes) == len
+    end
+
     @testset "put request" begin
         url = "$server/put"
         data = "Hello, world!"
