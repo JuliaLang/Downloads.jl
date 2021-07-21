@@ -29,10 +29,6 @@ using LibCURL
 using LibCURL: curl_off_t
 # not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
 
-# constants that LibCURL should have but doesn't
-const CURLE_PEER_FAILED_VERIFICATION = 60
-const CURLSSLOPT_REVOKE_BEST_EFFORT = 1 << 3
-
 using NetworkOptions
 using Base: preserve_handle, unpreserve_handle
 
@@ -68,8 +64,14 @@ function with_handle(f, handle::Union{Multi, Easy})
 end
 
 setopt(easy::Easy, option::Integer, value) =
-    @check curl_easy_setopt(easy.handle, option, value)
+    @check curl_easy_setopt(easy.handle, CURLoption(option), value)
 setopt(multi::Multi, option::Integer, value) =
-    @check curl_multi_setopt(multi.handle, option, value)
+    @check curl_multi_setopt(multi.handle, CURLMoption(option), value)
+
+# CEnum is no longer Integer in LibCURL.jl
+setopt(easy::Easy, option::CURLoption, value) = setopt(easy, Int(option), value)
+setopt(multi::Multi, option::CURLMoption, value) = setopt(multi, Int(option), value)
+Base.zero(::CURLcode) = CURLE_OK
+Base.zero(::CURLMcode) = CURLM_OK
 
 end # module
