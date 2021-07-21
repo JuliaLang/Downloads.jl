@@ -30,8 +30,12 @@ using LibCURL: curl_off_t
 # not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
 
 # constants that LibCURL should have but doesn't
-const CURLE_PEER_FAILED_VERIFICATION = 60
-const CURLSSLOPT_REVOKE_BEST_EFFORT = 1 << 3
+if Integer(LibCURL.CURLE_PEER_FAILED_VERIFICATION) != 60
+    const CURLE_PEER_FAILED_VERIFICATION = 60
+end
+if !@isdefined CURLSSLOPT_REVOKE_BEST_EFFORT
+    const CURLSSLOPT_REVOKE_BEST_EFFORT = 1 << 3
+end
 
 using NetworkOptions
 using Base: preserve_handle, unpreserve_handle
@@ -67,9 +71,9 @@ function with_handle(f, handle::Union{Multi, Easy})
     end
 end
 
-setopt(easy::Easy, option::Integer, value) =
+setopt(easy::Easy, option::CURLoption, value) =
     @check curl_easy_setopt(easy.handle, option, value)
-setopt(multi::Multi, option::Integer, value) =
+setopt(multi::Multi, option::CURLMoption, value) =
     @check curl_multi_setopt(multi.handle, option, value)
 
 end # module
