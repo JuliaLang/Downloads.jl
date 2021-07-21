@@ -33,7 +33,7 @@ function check(ex::Expr, lock::Bool)
     end
     quote
         r = $ex
-        iszero(r) || @async @error($prefix * string(r))
+        iszero(Integer(r)) || @async @error($prefix * string(r))
         r
     end
 end

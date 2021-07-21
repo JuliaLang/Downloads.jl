@@ -275,7 +275,7 @@ include("setup.jl")
 
         err = @exception download("$server/status/404")
         @test err isa RequestError
-        @test err.code == 0 && isempty(err.message)
+        @test err.code == Curl.CURLE_OK && isempty(err.message)
         @test err.response.status == 404
         @test contains(err.response.message, r"^HTTP/\d+(?:\.\d+)?\s+404\b")
         @test err.response.proto === "https"

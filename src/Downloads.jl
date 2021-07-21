@@ -124,7 +124,7 @@ in which case both the inner and outer code and message may be of interest.
 """
 struct RequestError <: Exception
     url      :: String # original URL
-    code     :: Int
+    code     :: Curl.CURLcode
     message  :: String
     response :: Response
 end
