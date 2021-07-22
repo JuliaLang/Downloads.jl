@@ -55,7 +55,7 @@ end
 function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         @check curl_multi_remove_handle(multi.handle, easy.handle)
-        deleteat!(multi.easies, findlast(==(easy), multi.easies)::Integer)
+        deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
         !isempty(multi.easies) && return
         cleanup_cb = @cfunction(cleanup_callback, Cvoid, (Ptr{Cvoid},))
         if multi.grace <= 0

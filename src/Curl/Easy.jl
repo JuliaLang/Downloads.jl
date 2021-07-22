@@ -256,9 +256,9 @@ function get_response_info(easy::Easy)
                 message = m.captures[1]::SubString{String}
                 empty!(headers)
             elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr); m) !== nothing
-                s1 = lowercase(m.captures[1]::SubString{String})
-                s2 = m.captures[2]::SubString{String}
-                push!(headers, s1 => s2)
+                key = lowercase(m.captures[1]::SubString{String})
+                val = m.captures[2]::SubString{String}
+                push!(headers, key => val)
             else
                 @warn "malformed HTTP header" url status header=hdr
             end
