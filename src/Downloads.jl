@@ -228,7 +228,7 @@ function download(
             progress = progress,
             verbose = verbose,
             downloader = downloader,
-        )
+        )::Response
         status_ok(response.proto, response.status) && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
