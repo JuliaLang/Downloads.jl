@@ -252,11 +252,13 @@ function get_response_info(easy::Easy)
         for hdr in easy.res_hdrs
             if contains(hdr, r"^\s*$")
                 # ignore
-            elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr)) !== nothing
-                message = m.captures[1]
+            elseif (m = match(r"^(HTTP/\d+(?:.\d+)?\s+\d+\b.*?)\s*$", hdr); m) !== nothing
+                message = m.captures[1]::SubString{String}
                 empty!(headers)
-            elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr)) !== nothing
-                push!(headers, lowercase(m.captures[1]) => m.captures[2])
+            elseif (m = match(r"^(\S[^:]*?)\s*:\s*(.*?)\s*$", hdr); m) !== nothing
+                key = lowercase(m.captures[1]::SubString{String})
+                val = m.captures[2]::SubString{String}
+                push!(headers, key => val)
             else
                 @warn "malformed HTTP header" url status header=hdr
             end
