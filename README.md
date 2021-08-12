@@ -1,6 +1,6 @@
 # Downloads
 
-[![Build Status](https://travis-ci.com/JuliaLang/Downloads.jl.svg?branch=master)](https://travis-ci.com/JuliaLang/Downloads.jl)
+[![Build Status](https://github.com/JuliaLang/Downloads.jl/workflows/CI/badge.svg)](https://github.com/JuliaLang/Downloads.jl/actions)
 [![Codecov](https://codecov.io/gh/JuliaLang/Downloads.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Downloads.jl)
 
 The `Downloads` package provides a single function, `download`, which provides
