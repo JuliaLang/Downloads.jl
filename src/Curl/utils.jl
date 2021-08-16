@@ -14,12 +14,14 @@ jl_malloc(n::Integer) = ccall(:jl_malloc, Ptr{Cvoid}, (Csize_t,), n)
 function check(ex::Expr, lock::Bool)
     ex.head == :call ||
         error("@check: not a call: $ex")
-    if ex.args[1] == :ccall
-        ex.args[2] isa QuoteNode ||
+    arg1 = ex.args[1] :: Symbol
+    if arg1 == :ccall
+        arg2 = ex.args[2]
+        arg2 isa QuoteNode ||
             error("@check: ccallee must be a symbol")
-        f = ex.args[2].value :: Symbol
+        f = arg2.value :: Symbol
     else
-        f = ex.args[1] :: Symbol
+        f = arg1
     end
     prefix = "$f: "
     ex = esc(ex)
