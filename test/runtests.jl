@@ -426,8 +426,8 @@ include("setup.jl")
 
     @testset "bad TLS" begin
         urls = [
-            "https://wrong.host.badssl.com"
             "https://untrusted-root.badssl.com"
+            "https://wrong.host.badssl.com"
         ]
         @testset "bad TLS is rejected" for url in urls
             resp = request(url, throw=false)
@@ -437,7 +437,9 @@ include("setup.jl")
         @testset "easy hook work-around" begin
             local url
             easy_hook = (easy, info) -> begin
-                Curl.set_ssl_verify(easy, false)
+                # don't verify anything (this disables SNI also)
+                Curl.setopt(easy, Curl.CURLOPT_SSL_VERIFYPEER, false)
+                Curl.setopt(easy, Curl.CURLOPT_SSL_VERIFYHOST, false)
                 @test info.url == url
             end
             # downloader-specific easy hook
@@ -460,6 +462,9 @@ include("setup.jl")
             Downloads.EASY_HOOK[] = nothing
         end
         ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**.badssl.com"
+        # wrong host *should* still fail, but may not due
+        # to libcurl bugs when using non-OpenSSL backends:
+        pop!(urls) # <= skip wrong host URL entirely here
         @testset "SSL no verify override" for url in urls
             resp = request(url, throw=false)
             @test resp isa Response
