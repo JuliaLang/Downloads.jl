@@ -391,7 +391,7 @@ end
 p_func(progress::Nothing, input::ArgRead, output::ArgWrite) = nothing
 
 arg_read_size(path::AbstractString) = filesize(path)
-arg_read_size(io::IOBuffer) = io.size - io.ptr + 1
+arg_read_size(io::Base.GenericIOBuffer) = bytesavailable(io)
 arg_read_size(::Base.DevNull) = 0
 arg_read_size(::Any) = nothing
 
