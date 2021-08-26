@@ -67,7 +67,7 @@ which will be called whenever there are updates about the size and status of the
 ongoing download. The callback must take two integer arguments: `total` and
 `now` which are the total size of the download in bytes, and the number of bytes
 which have been downloaded so far. Note that `total` starts out as zero and
-remains zero until the server gives an indiation of the total size of the
+remains zero until the server gives an indication of the total size of the
 download (e.g. with a `Content-Length` header), which may never happen. So a
 well-behaved progress callback should handle a total size of zero gracefully.
 
