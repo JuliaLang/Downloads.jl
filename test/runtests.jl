@@ -463,6 +463,14 @@ include("setup.jl")
         Downloads.download("https://httpbingo.org/drip"; downloader=dl)
         Downloads.download("https://httpbingo.org/drip"; downloader=dl)
     end
+
+    @testset "Input body size" begin
+        # Test mechanism to detect the body size from the request(; input) argument
+        @test Downloads.arg_read_size(@__FILE__) == filesize(@__FILE__)
+        @test Downloads.arg_read_size(IOBuffer("αa")) == 3
+        @test Downloads.arg_read_size(IOBuffer(codeunits("αa"))) == 3  # Issue #142
+        @test Downloads.arg_read_size(devnull) == 0
+    end
 end
 
 Downloads.DOWNLOADER[] = nothing
