@@ -43,6 +43,16 @@ end
 macro check(ex::Expr) check(ex, false) end
 macro check_iolock(ex::Expr) check(ex, true) end
 
+macro iolock(ex::Expr)
+    quote
+        Base.iolock_begin()
+        try $(esc(ex))
+        finally
+            Base.iolock_end()
+        end
+    end
+end
+
 # some libuv wrappers
 
 const UV_READABLE = 1
