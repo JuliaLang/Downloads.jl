@@ -33,8 +33,9 @@ using LibCURL: curl_off_t
 const CURLE_PEER_FAILED_VERIFICATION = 60
 const CURLSSLOPT_REVOKE_BEST_EFFORT = 1 << 3
 
+using FileWatching
 using NetworkOptions
-using Base: preserve_handle, unpreserve_handle
+using Base: OS_HANDLE, preserve_handle, unpreserve_handle
 
 include("utils.jl")
 
