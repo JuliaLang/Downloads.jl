@@ -73,20 +73,6 @@ function uv_close(p::Ptr{Cvoid}, cb::Ptr{Cvoid})
     Base.iolock_end()
 end
 
-function uv_timer_init(p::Ptr{Cvoid})
-    @check_iolock ccall(:uv_timer_init, Cint,
-        (Ptr{Cvoid}, Ptr{Cvoid}), Base.eventloop(), p)
-end
-
-function uv_timer_start(p::Ptr{Cvoid}, cb::Ptr{Cvoid}, t::Integer, r::Integer)
-    @check_iolock ccall(:uv_timer_start, Cint,
-        (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64), p, cb, t, r)
-end
-
-function uv_timer_stop(p::Ptr{Cvoid})
-    @check_iolock ccall(:uv_timer_stop, Cint, (Ptr{Cvoid},), p)
-end
-
 # additional libcurl methods
 
 function curl_multi_socket_action(multi_handle, s, ev_bitmask)

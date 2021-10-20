@@ -1,17 +1,14 @@
 mutable struct Multi
     lock   :: ReentrantLock
     handle :: Ptr{Cvoid}
-    timer  :: Ptr{Cvoid}
+    timer  :: Timer
     easies :: Vector{Easy}
     grace  :: UInt64
 
     function Multi(grace::Integer = typemax(UInt64))
-        timer = jl_malloc(Base._sizeof_uv_timer)
-        uv_timer_init(timer)
-        multi = new(ReentrantLock(), C_NULL, timer, Easy[], grace)
+        multi = new(ReentrantLock(), C_NULL, Timer(0), Easy[], grace)
         finalizer(multi) do multi
-            uv_timer_stop(multi.timer)
-            uv_close(multi.timer, cglobal(:jl_free))
+            close(multi.timer)
             done!(multi)
         end
     end
@@ -32,19 +29,11 @@ end
 
 # adding & removing easy handles
 
-function cleanup_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
-    ## TODO: use a member access API
-    multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
-    multi = unsafe_pointer_to_objref(multi_p)::Multi
-    done!(multi)
-    return
-end
-
 function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         if isempty(multi.easies)
             preserve_handle(multi)
-            uv_timer_stop(multi.timer) # stop grace timer
+            close(multi.timer) # stop grace timer
         end
         push!(multi.easies, easy)
         init!(multi)
@@ -57,11 +46,14 @@ function remove_handle(multi::Multi, easy::Easy)
         @check curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
         !isempty(multi.easies) && return
-        cleanup_cb = @cfunction(cleanup_callback, Cvoid, (Ptr{Cvoid},))
         if multi.grace <= 0
             done!(multi)
         elseif 0 < multi.grace < typemax(multi.grace)
-            uv_timer_start(multi.timer, cleanup_cb, multi.grace, 0)
+            multi.timer = Timer(multi.grace/1000)
+            @async begin
+                wait(multi.timer)
+                done!(multi)
+            end
         end
         unpreserve_handle(multi)
     end
@@ -123,17 +115,14 @@ function event_callback(
     end
 end
 
-function timeout_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
-    ## TODO: use a member access API
-    multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
-    multi = unsafe_pointer_to_objref(multi_p)::Multi
+# curl callbacks
+
+function do_multi(multi::Multi)
     lock(multi.lock) do
         @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
         check_multi_info(multi)
     end
 end
-
-# curl callbacks
 
 function timer_callback(
     multi_h    :: Ptr{Cvoid},
@@ -143,15 +132,13 @@ function timer_callback(
     multi = unsafe_pointer_to_objref(multi_p)::Multi
     @assert multi_h == multi.handle
     if timeout_ms == 0
-        lock(multi.lock) do
-            @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-            check_multi_info(multi)
-        end
+        do_multi(multi)
     elseif timeout_ms >= 0
-        timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)
+        multi.timer = Timer(timeout_ms/1000) do timer
+            do_multi(multi)
+        end
     elseif timeout_ms == -1
-        uv_timer_stop(multi.timer)
+        close(multi.timer)
     else
         @async @error("timer_callback: invalid timeout value", timeout_ms)
         return -1
@@ -200,10 +187,7 @@ function socket_callback(
 end
 
 function add_callbacks(multi::Multi)
-    # stash multi handle pointer in timer
     multi_p = pointer_from_objref(multi)
-    ## TODO: use a member access API
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, multi.timer), multi_p)
 
     # set timer callback
     timer_cb = @cfunction(timer_callback, Cint, (Ptr{Cvoid}, Clong, Ptr{Cvoid}))
