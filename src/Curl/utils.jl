@@ -31,12 +31,6 @@ macro check(ex::Expr)
     end
 end
 
-# additional libcurl methods
-
-function curl_multi_socket_action(multi_handle, s, ev_bitmask)
-    LibCURL.curl_multi_socket_action(multi_handle, s, ev_bitmask, Ref{Cint}())
-end
-
 # curl string list structure
 
 struct curl_slist_t

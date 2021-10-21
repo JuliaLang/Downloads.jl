@@ -26,12 +26,34 @@ export
         remove_handle
 
 using LibCURL
-using LibCURL: curl_off_t
+using LibCURL: curl_off_t, libcurl
 # not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
 
 # constants that LibCURL should have but doesn't
 const CURLE_PEER_FAILED_VERIFICATION = 60
 const CURLSSLOPT_REVOKE_BEST_EFFORT = 1 << 3
+
+# these are incorrectly defined on Windows by LibCURL:
+if Sys.iswindows()
+    const curl_socket_t = Base.OS_HANDLE
+    const CURL_SOCKET_TIMEOUT = Base.INVALID_OS_HANDLE
+else
+    const curl_socket_t = Cint
+    const CURL_SOCKET_TIMEOUT = -1
+end
+
+# definitions affected by incorrect curl_socket_t (copied verbatim):
+function curl_multi_socket_action(multi_handle, s, ev_bitmask, running_handles)
+    ccall((:curl_multi_socket_action, libcurl), CURLMcode, (Ptr{CURLM}, curl_socket_t, Cint, Ptr{Cint}), multi_handle, s, ev_bitmask, running_handles)
+end
+function curl_multi_assign(multi_handle, sockfd, sockp)
+    ccall((:curl_multi_assign, libcurl), CURLMcode, (Ptr{CURLM}, curl_socket_t, Ptr{Cvoid}), multi_handle, sockfd, sockp)
+end
+
+# additional curl_multi_socket_action method
+function curl_multi_socket_action(multi_handle, s, ev_bitmask)
+    curl_multi_socket_action(multi_handle, s, ev_bitmask, Ref{Cint}())
+end
 
 using FileWatching
 using NetworkOptions
