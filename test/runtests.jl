@@ -335,7 +335,7 @@ include("setup.jl")
 
     @testset "request API" begin
         @testset "basic request usage" begin
-            for status in (200, 300, 400)
+            for status in [200, 400, 404]
                 url = "$server/status/$status"
                 resp, body = request_body(url)
                 @test resp.url == url
