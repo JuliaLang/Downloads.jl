@@ -4,7 +4,7 @@ mutable struct Easy
     ready    :: Threads.Event
     seeker   :: Union{Function,Nothing}
     output   :: Channel{Vector{UInt8}}
-    progress :: Channel{NTuple{4,Int}}
+    progress :: Function
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
     code     :: CURLcode
@@ -13,14 +13,14 @@ end
 
 const EMPTY_BYTE_VECTOR = UInt8[]
 
-function Easy()
+function Easy(progress::Union{Function,Nothing})
     easy = Easy(
         curl_easy_init(),
         EMPTY_BYTE_VECTOR,
         Threads.Event(),
         nothing,
         Channel{Vector{UInt8}}(Inf),
-        Channel{NTuple{4,Int}}(Inf),
+        something(progress, (_, _, _, _) -> nothing),
         C_NULL,
         String[],
         typemax(CURLcode),
@@ -372,7 +372,7 @@ function progress_callback(
     ul_now   :: curl_off_t,
 )::Cint
     easy = unsafe_pointer_to_objref(easy_p)::Easy
-    put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
+    easy.progress(dl_total, dl_now, ul_total, ul_now)
     return 0
 end
 

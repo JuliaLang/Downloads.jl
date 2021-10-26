@@ -308,7 +308,7 @@ function request(
     progress = p_func(progress, input, output)
     arg_read(input) do input
         arg_write(output) do output
-            with_handle(Easy()) do easy
+            with_handle(Easy(progress)) do easy
                 # setup the request
                 set_url(easy, url)
                 set_timeout(easy, timeout)
@@ -347,11 +347,6 @@ function request(
                     @sync begin
                         @async for buf in easy.output
                             write(output, buf)
-                        end
-                        if progress !== nothing
-                            @async for prog in easy.progress
-                                progress(prog...)
-                            end
                         end
                         if have_input
                             @async upload_data(easy, input)
