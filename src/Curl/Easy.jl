@@ -1,7 +1,7 @@
 mutable struct Easy
     handle   :: Ptr{Cvoid}
     input    :: IO
-    ready    :: Threads.Event
+    done     :: Threads.Event
     seeker   :: Union{Function,Nothing}
     output   :: IO
     progress :: Function

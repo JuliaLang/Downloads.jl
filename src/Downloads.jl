@@ -343,10 +343,8 @@ function request(
 
                 # do the request
                 add_handle(downloader.multi, easy)
-                try wait(easy.ready) # can this throw?
-                finally
-                    remove_handle(downloader.multi, easy)
-                end
+                wait(easy.done)
+                remove_handle(downloader.multi, easy)
 
                 # return the response or throw an error
                 response = Response(get_response_info(easy)...)
