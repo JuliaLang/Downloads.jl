@@ -308,7 +308,7 @@ function request(
     progress = p_func(progress, input, output)
     arg_read(input) do input
         arg_write(output) do output
-            with_handle(Easy(output, progress)) do easy
+            with_handle(Easy(input, output, progress)) do easy
                 # setup the request
                 set_url(easy, url)
                 set_timeout(easy, timeout)
@@ -343,13 +343,7 @@ function request(
 
                 # do the request
                 add_handle(downloader.multi, easy)
-                try # ensure handle is removed
-                    @sync begin
-                        if have_input
-                            @async upload_data(easy, input)
-                        end
-                        @async wait(easy.ready)
-                    end
+                try wait(easy.ready) # can this throw?
                 finally
                     remove_handle(downloader.multi, easy)
                 end

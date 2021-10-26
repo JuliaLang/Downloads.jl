@@ -1,6 +1,6 @@
 mutable struct Easy
     handle   :: Ptr{Cvoid}
-    input    :: Union{Vector{UInt8},Nothing}
+    input    :: IO
     ready    :: Threads.Event
     seeker   :: Union{Function,Nothing}
     output   :: IO
@@ -11,15 +11,14 @@ mutable struct Easy
     errbuf   :: Vector{UInt8}
 end
 
-const EMPTY_BYTE_VECTOR = UInt8[]
-
 function Easy(
-    output::IO,
-    progress::Union{Function,Nothing},
+    input    :: IO,
+    output   :: IO,
+    progress :: Union{Function,Nothing},
 )
     easy = Easy(
         curl_easy_init(),
-        EMPTY_BYTE_VECTOR,
+        input,
         Threads.Event(),
         nothing,
         output,
@@ -287,50 +286,28 @@ end
 # callbacks
 
 function header_callback(
-    data   :: Ptr{Cchar},
+    data   :: Ptr{UInt8},
     size   :: Csize_t,
     count  :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Csize_t
     easy = unsafe_pointer_to_objref(easy_p)::Easy
-    n = size * count
+    n = size*count
     hdr = unsafe_string(data, n)
     push!(easy.res_hdrs, hdr)
     return n
 end
 
-# feed data to read_callback
-function upload_data(easy::Easy, input::IO)
-    while true
-        data = eof(input) ? nothing : readavailable(input)
-        easy.input === nothing && break
-        easy.input = data
-        curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
-        wait(easy.ready)
-        easy.input === nothing && break
-        easy.ready = Threads.Event()
-    end
-end
-
 function read_callback(
-    data   :: Ptr{Cchar},
+    data   :: Ptr{UInt8},
     size   :: Csize_t,
     count  :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Csize_t
     easy = unsafe_pointer_to_objref(easy_p)::Easy
-    buf = easy.input
-    if buf === nothing
-        notify(easy.ready)
-        return 0 # done uploading
-    end
-    if isempty(buf)
-        notify(easy.ready)
-        return CURL_READFUNC_PAUSE # wait for more data
-    end
-    n = min(size * count, length(buf))
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), data, buf, n)
-    deleteat!(buf, 1:n)
+    eof(easy.input) && return 0
+    buf = unsafe_wrap(Vector{UInt8}, data, size*count)
+    n = readbytes!(easy.input, buf, size*count)
     return n
 end
 
@@ -347,7 +324,7 @@ function seek_callback(
     easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
     try easy.seeker(offset)
     catch err
-        @async @error("seek_callback: seeker failed", err)
+        @async @error("seek_callback: seek failed", err)
         return CURL_SEEKFUNC_FAIL
     end
     return CURL_SEEKFUNC_OK
@@ -387,7 +364,7 @@ function add_callbacks(easy::Easy)
 
     # set header callback
     header_cb = @cfunction(header_callback,
-        Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
+        Csize_t, (Ptr{UInt8}, Csize_t, Csize_t, Ptr{Cvoid}))
     setopt(easy, CURLOPT_HEADERFUNCTION, header_cb)
     setopt(easy, CURLOPT_HEADERDATA, easy_p)
 
@@ -410,7 +387,7 @@ function add_upload_callbacks(easy::Easy)
 
     # set read callback
     read_cb = @cfunction(read_callback,
-        Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
+        Csize_t, (Ptr{UInt8}, Csize_t, Csize_t, Ptr{Cvoid}))
     setopt(easy, CURLOPT_READFUNCTION, read_cb)
     setopt(easy, CURLOPT_READDATA, easy_p)
 end
