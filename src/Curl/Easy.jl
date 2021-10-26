@@ -3,7 +3,7 @@ mutable struct Easy
     input    :: Union{Vector{UInt8},Nothing}
     ready    :: Threads.Event
     seeker   :: Union{Function,Nothing}
-    output   :: Channel{Vector{UInt8}}
+    output   :: IO
     progress :: Function
     req_hdrs :: Ptr{curl_slist_t}
     res_hdrs :: Vector{String}
@@ -13,13 +13,16 @@ end
 
 const EMPTY_BYTE_VECTOR = UInt8[]
 
-function Easy(progress::Union{Function,Nothing})
+function Easy(
+    output::IO,
+    progress::Union{Function,Nothing},
+)
     easy = Easy(
         curl_easy_init(),
         EMPTY_BYTE_VECTOR,
         Threads.Event(),
         nothing,
-        Channel{Vector{UInt8}}(Inf),
+        output,
         something(progress, (_, _, _, _) -> nothing),
         C_NULL,
         String[],
@@ -351,17 +354,14 @@ function seek_callback(
 end
 
 function write_callback(
-    data   :: Ptr{Cchar},
+    data   :: Ptr{UInt8},
     size   :: Csize_t,
     count  :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Csize_t
     easy = unsafe_pointer_to_objref(easy_p)::Easy
-    n = size * count
-    buf = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    put!(easy.output, buf)
-    return n
+    unsafe_write(easy.output, data, size*count)
+    return size*count
 end
 
 function progress_callback(
@@ -393,7 +393,7 @@ function add_callbacks(easy::Easy)
 
     # set write callback
     write_cb = @cfunction(write_callback,
-        Csize_t, (Ptr{Cchar}, Csize_t, Csize_t, Ptr{Cvoid}))
+        Csize_t, (Ptr{UInt8}, Csize_t, Csize_t, Ptr{Cvoid}))
     setopt(easy, CURLOPT_WRITEFUNCTION, write_cb)
     setopt(easy, CURLOPT_WRITEDATA, easy_p)
 

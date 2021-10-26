@@ -85,7 +85,6 @@ function check_multi_info(multi::Multi)
             easy = unsafe_pointer_to_objref(easy_p_ref[])::Easy
             @assert easy_handle == easy.handle
             easy.code = message.code
-            close(easy.output)
             easy.input = nothing
             notify(easy.ready)
         else
