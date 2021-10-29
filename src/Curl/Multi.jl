@@ -49,10 +49,10 @@ function remove_handle(multi::Multi, easy::Easy)
         if multi.grace <= 0
             done!(multi)
         elseif 0 < multi.grace < typemax(multi.grace)
-            multi.timer = Timer(multi.grace/1000)
-            @async begin
-                wait(multi.timer)
-                isopen(multi.timer) && done!(multi)
+            multi.timer = Timer(multi.grace/1000) do
+                lock(multi.lock) do
+                    isopen(multi.timer) && done!(multi)
+                end
             end
         end
         unpreserve_handle(multi)
@@ -98,10 +98,8 @@ end
 # curl callbacks
 
 function do_multi(multi::Multi)
-    lock(multi.lock) do
-        @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-        check_multi_info(multi)
-    end
+    @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+    check_multi_info(multi)
 end
 
 function timer_callback(
@@ -115,7 +113,9 @@ function timer_callback(
         do_multi(multi)
     elseif timeout_ms >= 0
         multi.timer = Timer(timeout_ms/1000) do timer
-            do_multi(multi)
+            lock(multi.lock) do
+                isopen(multi.timer) && do_multi(multi)
+            end
         end
     elseif timeout_ms == -1
         close(multi.timer)
