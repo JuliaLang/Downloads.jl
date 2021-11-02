@@ -150,16 +150,17 @@ function socket_callback(
         preserve_handle(watcher)
         watcher_p = pointer_from_objref(watcher)
         @check curl_multi_assign(multi.handle, sock, watcher_p)
-        task = @async while true
+        task = @async while watcher.readable || watcher.writable # isopen(watcher) 
             events = try wait(watcher)
             catch err
-                err isa EOFError && break
+                err isa EOFError && return
                 rethrow()
             end
             flags = CURL_CSELECT_IN  * isreadable(events) +
                     CURL_CSELECT_OUT * iswritable(events) +
                     CURL_CSELECT_ERR * events.disconnect
             lock(multi.lock) do
+                watcher.readable || watcher.writable || return # !isopen
                 @check curl_multi_socket_action(multi.handle, sock, flags)
                 check_multi_info(multi)
             end
