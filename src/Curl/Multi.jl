@@ -49,9 +49,9 @@ function remove_handle(multi::Multi, easy::Easy)
         if multi.grace <= 0
             done!(multi)
         elseif 0 < multi.grace < typemax(multi.grace)
-            multi.timer = Timer(multi.grace/1000) do
+            multi.timer = Timer(multi.grace/1000) do timer
                 lock(multi.lock) do
-                    isopen(multi.timer) && done!(multi)
+                    isopen(timer) && done!(multi)
                 end
             end
         end
@@ -114,7 +114,7 @@ function timer_callback(
     elseif timeout_ms >= 0
         multi.timer = Timer(timeout_ms/1000) do timer
             lock(multi.lock) do
-                isopen(multi.timer) && do_multi(multi)
+                isopen(timer) && do_multi(multi)
             end
         end
     elseif timeout_ms == -1
