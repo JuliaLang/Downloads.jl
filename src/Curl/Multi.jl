@@ -1,16 +1,14 @@
 mutable struct Multi
     lock   :: ReentrantLock
     handle :: Ptr{Cvoid}
-    timer  :: Timer
+    timer  :: Union{Nothing,Timer}
     easies :: Vector{Easy}
     grace  :: UInt64
 
     function Multi(grace::Integer = typemax(UInt64))
-        multi = new(ReentrantLock(), C_NULL, Timer(0), Easy[], grace)
-        finalizer(multi) do multi
-            close(multi.timer)
-            done!(multi)
-        end
+        multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
+        finalizer(done!, multi)
+        return multi
     end
 end
 
@@ -19,12 +17,25 @@ function init!(multi::Multi)
     multi.handle = curl_multi_init()
     add_callbacks(multi)
     set_defaults(multi)
+    nothing
 end
 
 function done!(multi::Multi)
-    multi.handle == C_NULL && return
-    curl_multi_cleanup(multi.handle)
+    stoptimer!(multi)
+    handle = multi.handle
+    handle == C_NULL && return
     multi.handle = C_NULL
+    curl_multi_cleanup(handle)
+    nothing
+end
+
+function stoptimer!(multi::Multi)
+    t = multi.timer
+    if t !== nothing
+        multi.timer = nothing
+        close(t) # stop grace timer
+    end
+    nothing
 end
 
 # adding & removing easy handles
@@ -33,7 +44,6 @@ function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         if isempty(multi.easies)
             preserve_handle(multi)
-            close(multi.timer) # stop grace timer
         end
         push!(multi.easies, easy)
         init!(multi)
@@ -45,13 +55,16 @@ function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         @check curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
-        !isempty(multi.easies) && return
+        isempty(multi.easies) || return        
+        stoptimer!(multi)
         if multi.grace <= 0
             done!(multi)
         elseif 0 < multi.grace < typemax(multi.grace)
             multi.timer = Timer(multi.grace/1000) do timer
                 lock(multi.lock) do
-                    isopen(timer) && done!(multi)
+                    multi.timer === timer || return
+                    multi.timer = nothing
+                    done!(multi)
                 end
             end
         end
@@ -108,18 +121,19 @@ function timer_callback(
     multi_p    :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
-    @assert multi_h == multi.handle
+    @assert multi_h == multi.handle     
+    stoptimer!(multi)
     if timeout_ms == 0
         do_multi(multi)
     elseif timeout_ms >= 0
         multi.timer = Timer(timeout_ms/1000) do timer
             lock(multi.lock) do
-                isopen(timer) && do_multi(multi)
+                multi.timer === timer || return
+                multi.timer = nothing
+                do_multi(multi)
             end
         end
-    elseif timeout_ms == -1
-        close(multi.timer)
-    else
+    elseif timeout_ms != -1
         @async @error("timer_callback: invalid timeout value", timeout_ms)
         return -1
     end
