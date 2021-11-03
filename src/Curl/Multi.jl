@@ -33,7 +33,7 @@ function stoptimer!(multi::Multi)
     t = multi.timer
     if t !== nothing
         multi.timer = nothing
-        close(t) # stop grace timer
+        close(t)
     end
     nothing
 end
