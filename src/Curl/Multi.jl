@@ -55,7 +55,7 @@ function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         @check curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
-        isempty(multi.easies) || return        
+        isempty(multi.easies) || return
         stoptimer!(multi)
         if multi.grace <= 0
             done!(multi)
@@ -121,7 +121,7 @@ function timer_callback(
     multi_p    :: Ptr{Cvoid},
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
-    @assert multi_h == multi.handle     
+    @assert multi_h == multi.handle
     stoptimer!(multi)
     if timeout_ms == 0
         do_multi(multi)
@@ -164,7 +164,7 @@ function socket_callback(
         preserve_handle(watcher)
         watcher_p = pointer_from_objref(watcher)
         @check curl_multi_assign(multi.handle, sock, watcher_p)
-        task = @async while watcher.readable || watcher.writable # isopen(watcher) 
+        task = @async while watcher.readable || watcher.writable # isopen(watcher)
             events = try wait(watcher)
             catch err
                 err isa EOFError && return
