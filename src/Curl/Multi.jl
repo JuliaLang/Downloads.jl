@@ -123,9 +123,7 @@ function timer_callback(
     multi = unsafe_pointer_to_objref(multi_p)::Multi
     @assert multi_h == multi.handle
     stoptimer!(multi)
-    if timeout_ms == 0
-        do_multi(multi)
-    elseif timeout_ms >= 0
+    if timeout_ms >= 0
         multi.timer = Timer(timeout_ms/1000) do timer
             lock(multi.lock) do
                 multi.timer === timer || return
