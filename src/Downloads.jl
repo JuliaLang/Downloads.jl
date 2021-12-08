@@ -305,6 +305,10 @@ function request(
     input = something(input, devnull)
     output = something(output, devnull)
     input_size = arg_read_size(input)
+    if input_size === nothing
+        # take input_size from content-length header is one is supplied
+        input_size = content_length(headers)
+    end
     progress = p_func(progress, input, output)
     arg_read(input) do input
         arg_write(output) do output
@@ -394,5 +398,14 @@ arg_read_size(path::AbstractString) = filesize(path)
 arg_read_size(io::Base.GenericIOBuffer) = bytesavailable(io)
 arg_read_size(::Base.DevNull) = 0
 arg_read_size(::Any) = nothing
+
+function content_length(headers)
+    for kv in headers
+        if lowercase(kv[1]) == "content-length" && isa(kv[2], AbstractString)
+            return tryparse(Int, kv[2])
+        end
+    end
+    return nothing
+end
 
 end # module
