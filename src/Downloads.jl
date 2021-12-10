@@ -399,7 +399,7 @@ arg_read_size(io::Base.GenericIOBuffer) = bytesavailable(io)
 arg_read_size(::Base.DevNull) = 0
 arg_read_size(::Any) = nothing
 
-function content_length(headers)
+function content_length(headers::Union{AbstractVector, AbstractDict})
     for kv in headers
         if lowercase(kv[1]) == "content-length" && isa(kv[2], AbstractString)
             return tryparse(Int, kv[2])
