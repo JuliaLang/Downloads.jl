@@ -306,7 +306,7 @@ function request(
     output = something(output, devnull)
     input_size = arg_read_size(input)
     if input_size === nothing
-        # take input_size from content-length header is one is supplied
+        # take input_size from content-length header if one is supplied
         input_size = content_length(headers)
     end
     progress = p_func(progress, input, output)
