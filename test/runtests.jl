@@ -513,6 +513,8 @@ include("setup.jl")
         @test Downloads.arg_read_size(IOBuffer("αa")) == 3
         @test Downloads.arg_read_size(IOBuffer(codeunits("αa"))) == 3  # Issue #142
         @test Downloads.arg_read_size(devnull) == 0
+        @test Downloads.content_length(["Accept"=>"*/*",]) === nothing
+        @test Downloads.content_length(["Accept"=>"*/*", "Content-Length"=>"100"]) == 100
     end
 end
 
