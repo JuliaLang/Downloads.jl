@@ -400,7 +400,7 @@ arg_read_size(::Base.DevNull) = 0
 arg_read_size(::Any) = nothing
 
 function content_length(headers::Union{AbstractVector, AbstractDict})
-    for (key,value) in headers
+    for (key, value) in headers
         if lowercase(key) == "content-length" && isa(value, AbstractString)
             return tryparse(Int, value)
         end
