@@ -195,6 +195,22 @@ include("setup.jl")
         end
     end
 
+    @testset "debug callback" begin
+        url = "$server/get"
+        events = Pair{String,String}[]
+        resp = request(url, debug = (type, msg) -> push!(events, type => msg))
+        @test resp isa Response && resp.status == 200
+        @test any(events) do (type, msg)
+            type == "TEXT" && startswith(msg, "Connected to ")
+        end
+        @test any(events) do (type, msg)
+            type == "HEADER OUT" && contains(msg, r"^HEAD /get HTTP/[\d\.+]+\s$"m)
+        end
+        @test any(events) do (type, msg)
+            type == "HEADER IN" && contains(msg, r"^HTTP/[\d\.]+ 200 OK\s*$")
+        end
+    end
+
     @testset "session support" begin
         downloader = Downloader()
 
