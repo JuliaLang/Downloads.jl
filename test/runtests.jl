@@ -109,17 +109,25 @@ include("setup.jl")
         url = "$server/put"
         file = tempname()
         write(file, "Hello, world!")
-        open(file) do io
-            # without any content-length headers results in a chunked transfer encoding for upload
-            resp, json = request_json(url, input=io)
-            @test json["url"] == url
-            @test json["data"] == read(file, String)
-        end
-        open(file) do io
-            # with content-length headers results in a non-chunked upload
-            resp, json = request_json(url, input=io, headers=["Content-Length"=>string(filesize(file))])
-            @test json["url"] == url
-            @test json["data"] == read(file, String)
+        len = filesize(file)
+        for headers in [Pair{String,String}[], ["Content-Length" => "$len"]]
+            open(file) do io
+                events = Pair{String,String}[]
+                debug(type, msg) = push!(events, type => msg)
+                resp, json = request_json(url, input=io, debug=debug, headers=headers)
+                @test json["url"] == url
+                @test json["data"] == read(file, String)
+                header_out(hdr::String) = any(events) do (type, msg)
+                    type == "HEADER OUT" && hdr in map(lowercase, split(msg, "\r\n"))
+                end
+                chunked = header_out("transfer-encoding: chunked")
+                content_length = header_out("content-length: $len")
+                if isempty(headers)
+                    @test chunked && !content_length
+                else
+                    @test !chunked && content_length
+                end
+            end
         end
         rm(file)
     end
