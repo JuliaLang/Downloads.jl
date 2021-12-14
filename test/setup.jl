@@ -60,10 +60,10 @@ end
 # URL escape & unescape
 
 function is_url_safe_byte(byte::UInt8)
-    0x2d ≤ byte ≤ 0x2e ||
+    0x2d ≤ byte ≤ 0x2e ||
     0x30 ≤ byte ≤ 0x39 ||
-    0x41 ≤ byte ≤ 0x5a ||
-    0x61 ≤ byte ≤ 0x7a ||
+    0x41 ≤ byte ≤ 0x5a ||
+    0x61 ≤ byte ≤ 0x7a ||
     byte == 0x5f ||
     byte == 0x7e
 end

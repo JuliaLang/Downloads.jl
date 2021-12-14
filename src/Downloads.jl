@@ -5,10 +5,10 @@ for the `Base.download` function in Julia 1.6 or later.
 
 More generally, the module exports functions and types that provide lower-level control and diagnostic information
 for file downloading:
-- [`download`](@ref) — download a file from a URL, erroring if it can't be downloaded
+- [`download`](@ref) — download a file from a URL, erroring if it can't be downloaded
 - [`request`](@ref) — request a URL, returning a `Response` object indicating success
-- [`Response`](@ref) — a type capturing the status and other metadata about a request
-- [`RequestError`](@ref) — an error type thrown by `download` and `request` on error
+- [`Response`](@ref) — a type capturing the status and other metadata about a request
+- [`RequestError`](@ref) — an error type thrown by `download` and `request` on error
 - [`Downloader`](@ref) — an object encapsulating shared resources for downloading
 """
 module Downloads
@@ -165,6 +165,7 @@ end
         [ timeout = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
+        [ debug = <none>, ]
         [ downloader = <default>, ]
     ) -> output
 
@@ -175,6 +176,7 @@ end
         timeout    :: Real
         progress   :: (total::Integer, now::Integer) --> Any
         verbose    :: Bool
+        debug      :: (type, message) --> Any
         downloader :: Downloader
 
 Download a file from the given url, saving it to `output` or if not specified, a
@@ -206,7 +208,13 @@ download (e.g. with a `Content-Length` header), which may never happen. So a
 well-behaved progress callback should handle a total size of zero gracefully.
 
 If the `verbose` option is set to true, `libcurl`, which is used to implement
-the download functionality will print debugging information to `stderr`.
+the download functionality will print debugging information to `stderr`. If the
+`debug` option is set to a function accepting two `String` arguments, then the
+verbose option is ignored and instead the data that would have been printed to
+`stderr` is passed to the `debug` callback with `type` and `message` arguments.
+The `type` argument indicates what kind of event has occurred, and is one of:
+`TEXT`, `HEADER IN`, `HEADER OUT`, `DATA IN`, `DATA OUT`, `SSL DATA IN` or `SSL
+DATA OUT`. The `message` argument is the description of the debug event.
 """
 function download(
     url        :: AbstractString,
@@ -216,6 +224,7 @@ function download(
     timeout    :: Real = Inf,
     progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
+    debug      :: Union{Function, Nothing} = nothing,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
     arg_write(output) do output
@@ -227,6 +236,7 @@ function download(
             timeout = timeout,
             progress = progress,
             verbose = verbose,
+            debug = debug,
             downloader = downloader,
         )::Response
         status_ok(response.proto, response.status) && return output
@@ -245,6 +255,7 @@ end
         [ timeout = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
+        [ debug = <none>, ]
         [ throw = true, ]
         [ downloader = <default>, ]
     ) -> Union{Response, RequestError}
@@ -257,6 +268,7 @@ end
         timeout    :: Real
         progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any
         verbose    :: Bool
+        debug      :: (type, message) --> Any
         throw      :: Bool
         downloader :: Downloader
 
@@ -287,6 +299,7 @@ function request(
     timeout    :: Real = Inf,
     progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
+    debug      :: Union{Function, Nothing} = nothing,
     throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: Union{Response, RequestError}
@@ -317,6 +330,7 @@ function request(
                 set_url(easy, url)
                 set_timeout(easy, timeout)
                 set_verbose(easy, verbose)
+                set_debug(easy, debug)
                 add_headers(easy, headers)
 
                 # libcurl does not set the default header reliably so set it
