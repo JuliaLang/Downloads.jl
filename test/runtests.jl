@@ -105,6 +105,25 @@ include("setup.jl")
         rm(file)
     end
 
+    @testset "put from io" begin
+        url = "$server/put"
+        file = tempname()
+        write(file, "Hello, world!")
+        open(file) do io
+            # without any content-length headers results in a chunked transfer encoding for upload
+            resp, json = request_json(url, input=io)
+            @test json["url"] == url
+            @test json["data"] == read(file, String)
+        end
+        open(file) do io
+            # with content-length headers results in a non-chunked upload
+            resp, json = request_json(url, input=io, headers=["Content-Length"=>string(filesize(file))])
+            @test json["url"] == url
+            @test json["data"] == read(file, String)
+        end
+        rm(file)
+    end
+
     @testset "redirected get" begin
         url = "$server/get"
         redirect = "$server/redirect-to?url=$(url_escape(url))"
