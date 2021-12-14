@@ -116,7 +116,7 @@ function set_upload_size(easy::Easy, size::Integer)
 end
 
 function set_seeker(seeker::Function, easy::Easy)
-    add_seek_callbacks(easy)
+    add_seek_callback(easy)
     easy.seeker = seeker
 end
 
@@ -159,7 +159,7 @@ function enable_progress(easy::Easy, on::Bool=true)
 end
 
 function enable_upload(easy::Easy)
-    add_upload_callbacks(easy::Easy)
+    add_upload_callback(easy::Easy)
     setopt(easy, CURLOPT_UPLOAD, true)
 end
 
@@ -404,7 +404,7 @@ function add_callbacks(easy::Easy)
     setopt(easy, CURLOPT_XFERINFODATA, easy_p)
 end
 
-function add_upload_callbacks(easy::Easy)
+function add_upload_callback(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
 
@@ -415,7 +415,7 @@ function add_upload_callbacks(easy::Easy)
     setopt(easy, CURLOPT_READDATA, easy_p)
 end
 
-function add_seek_callbacks(easy::Easy)
+function add_seek_callback(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
 
