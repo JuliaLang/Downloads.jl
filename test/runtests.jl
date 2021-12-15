@@ -105,6 +105,33 @@ include("setup.jl")
         rm(file)
     end
 
+    @testset "put from io" begin
+        url = "$server/put"
+        file = tempname()
+        write(file, "Hello, world!")
+        len = filesize(file)
+        for headers in [Pair{String,String}[], ["Content-Length" => "$len"]]
+            open(file) do io
+                events = Pair{String,String}[]
+                debug(type, msg) = push!(events, type => msg)
+                resp, json = request_json(url, input=io, debug=debug, headers=headers)
+                @test json["url"] == url
+                @test json["data"] == read(file, String)
+                header_out(hdr::String) = any(events) do (type, msg)
+                    type == "HEADER OUT" && hdr in map(lowercase, split(msg, "\r\n"))
+                end
+                chunked = header_out("transfer-encoding: chunked")
+                content_length = header_out("content-length: $len")
+                if isempty(headers)
+                    @test chunked && !content_length
+                else
+                    @test !chunked && content_length
+                end
+            end
+        end
+        rm(file)
+    end
+
     @testset "redirected get" begin
         url = "$server/get"
         redirect = "$server/redirect-to?url=$(url_escape(url))"
@@ -192,6 +219,22 @@ include("setup.jl")
                     @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
                 end
             end
+        end
+    end
+
+    @testset "debug callback" begin
+        url = "$server/get"
+        events = Pair{String,String}[]
+        resp = request(url, debug = (type, msg) -> push!(events, type => msg))
+        @test resp isa Response && resp.status == 200
+        @test any(events) do (type, msg)
+            type == "TEXT" && startswith(msg, "Connected to ")
+        end
+        @test any(events) do (type, msg)
+            type == "HEADER OUT" && contains(msg, r"^HEAD /get HTTP/[\d\.+]+\s$"m)
+        end
+        @test any(events) do (type, msg)
+            type == "HEADER IN" && contains(msg, r"^HTTP/[\d\.]+ 200 OK\s*$")
         end
     end
 

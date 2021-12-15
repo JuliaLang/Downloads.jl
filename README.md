@@ -16,10 +16,10 @@ Julia 1.3 through 1.5 as well.
 
 The public API of `Downloads` consists of two functions and three types:
 
-- `download` — download a file from a URL, erroring if it can't be downloaded
+- `download` — download a file from a URL, erroring if it can't be downloaded
 - `request` — request a URL, returning a `Response` object indicating success
-- `Response` — a type capturing the status and other metadata about a request
-- `RequestError` — an error type thrown by `download` and `request` on error
+- `Response` — a type capturing the status and other metadata about a request
+- `RequestError` — an error type thrown by `download` and `request` on error
 - `Downloader` — an object encapsulating shared resources for downloading
 
 ### download
@@ -31,6 +31,7 @@ download(url, [ output = tempfile() ];
     [ timeout = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
+    [ debug = <none>, ]
     [ downloader = <default>, ]
 ) -> output
 ```
@@ -41,6 +42,7 @@ download(url, [ output = tempfile() ];
 - `timeout    :: Real`
 - `progress   :: (total::Integer, now::Integer) --> Any`
 - `verbose    :: Bool`
+- `debug      :: (type, message) --> Any`
 - `downloader :: Downloader`
 
 Download a file from the given url, saving it to `output` or if not specified, a
@@ -71,8 +73,14 @@ remains zero until the server gives an indication of the total size of the
 download (e.g. with a `Content-Length` header), which may never happen. So a
 well-behaved progress callback should handle a total size of zero gracefully.
 
-If the `verbose` optoin is set to true, `libcurl`, which is used to implement
-the download functionality will print debugging information to `stderr`.
+If the `verbose` option is set to true, `libcurl`, which is used to implement
+the download functionality will print debugging information to `stderr`. If the
+`debug` option is set to a function accepting two `String` arguments, then the
+verbose option is ignored and instead the data that would have been printed to
+`stderr` is passed to the `debug` callback with `type` and `message` arguments.
+The `type` argument indicates what kind of event has occurred, and is one of:
+`TEXT`, `HEADER IN`, `HEADER OUT`, `DATA IN`, `DATA OUT`, `SSL DATA IN` or `SSL
+DATA OUT`. The `message` argument is the description of the debug event.
 
 ### request
 
@@ -85,6 +93,7 @@ request(url;
     [ timeout = <none>, ]
     [ progress = <none>, ]
     [ verbose = false, ]
+    [ debug = <none>, ]
     [ throw = true, ]
     [ downloader = <default>, ]
 ) -> Union{Response, RequestError}
@@ -97,6 +106,7 @@ request(url;
 - `timeout    :: Real`
 - `progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any`
 - `verbose    :: Bool`
+- `debug      :: (type, message) --> Any`
 - `throw      :: Bool`
 - `downloader :: Downloader`
 
