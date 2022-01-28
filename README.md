@@ -25,7 +25,7 @@ The public API of `Downloads` consists of two functions and three types:
 ### download
 
 ```jl
-download(url, [ output = tempfile() ];
+download(url, [ output = tempname() ];
     [ method = "GET", ]
     [ headers = <none>, ]
     [ timeout = <none>, ]
