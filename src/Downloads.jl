@@ -159,7 +159,7 @@ end
 ## download API ##
 
 """
-    download(url, [ output = tempfile() ];
+    download(url, [ output = tempname() ];
         [ method = "GET", ]
         [ headers = <none>, ]
         [ timeout = <none>, ]
