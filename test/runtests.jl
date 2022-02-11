@@ -469,8 +469,8 @@ include("setup.jl")
 
     @testset "bad TLS" begin
         urls = [
-            "https://untrusted-root.badssl.com"
-            "https://wrong.host.badssl.com"
+            "https://untrusted-root.badssl.julialang.org"
+            "https://wrong.host.badssl.julialang.org"
         ]
         @testset "bad TLS is rejected" for url in urls
             resp = request(url, throw=false)
@@ -504,7 +504,7 @@ include("setup.jl")
             Downloads.DOWNLOADER[] = nothing
             Downloads.EASY_HOOK[] = nothing
         end
-        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**.badssl.com"
+        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**.badssl.julialang.org"
         # wrong host *should* still fail, but may not due
         # to libcurl bugs when using non-OpenSSL backends:
         pop!(urls) # <= skip wrong host URL entirely here
