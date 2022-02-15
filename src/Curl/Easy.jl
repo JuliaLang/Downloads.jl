@@ -183,7 +183,7 @@ end
 function get_protocol(easy::Easy)
     proto_ref = Ref{Clong}()
     r = @check curl_easy_getinfo(easy.handle, CURLINFO_PROTOCOL, proto_ref)
-    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or us a Julia build that uses its own `libcurl` library.")
+    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or use a Julia build that uses its own `libcurl` library.")
     proto = proto_ref[]
     proto == CURLPROTO_DICT   && return "dict"
     proto == CURLPROTO_FILE   && return "file"
