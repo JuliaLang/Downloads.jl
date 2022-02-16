@@ -215,7 +215,7 @@ const PROTOCOL_STATUS = Dict{String,Function}(
     "pop3s"  => status_2xx_ok,
     "rtsp"   => status_2xx_ok,
     "scp"    => status_zero_ok,
-    "sftp"   => status_2xx_ok,
+    "sftp"   => status_zero_ok,
     "smtp"   => status_2xx_ok,
     "smtps"  => status_2xx_ok,
 )
