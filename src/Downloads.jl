@@ -5,10 +5,10 @@ for the `Base.download` function in Julia 1.6 or later.
 
 More generally, the module exports functions and types that provide lower-level control and diagnostic information
 for file downloading:
-- [`download`](@ref) — download a file from a URL, erroring if it can't be downloaded
+- [`download`](@ref) — download a file from a URL, erroring if it can't be downloaded
 - [`request`](@ref) — request a URL, returning a `Response` object indicating success
-- [`Response`](@ref) — a type capturing the status and other metadata about a request
-- [`RequestError`](@ref) — an error type thrown by `download` and `request` on error
+- [`Response`](@ref) — a type capturing the status and other metadata about a request
+- [`RequestError`](@ref) — an error type thrown by `download` and `request` on error
 - [`Downloader`](@ref) — an object encapsulating shared resources for downloading
 """
 module Downloads
@@ -165,6 +165,7 @@ end
         [ timeout = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
+        [ debug = <none>, ]
         [ downloader = <default>, ]
     ) -> output
 
@@ -175,6 +176,7 @@ end
         timeout    :: Real
         progress   :: (total::Integer, now::Integer) --> Any
         verbose    :: Bool
+        debug      :: (type, message) --> Any
         downloader :: Downloader
 
 Download a file from the given url, saving it to `output` or if not specified, a
@@ -201,12 +203,18 @@ which will be called whenever there are updates about the size and status of the
 ongoing download. The callback must take two integer arguments: `total` and
 `now` which are the total size of the download in bytes, and the number of bytes
 which have been downloaded so far. Note that `total` starts out as zero and
-remains zero until the server gives an indiation of the total size of the
+remains zero until the server gives an indication of the total size of the
 download (e.g. with a `Content-Length` header), which may never happen. So a
 well-behaved progress callback should handle a total size of zero gracefully.
 
 If the `verbose` option is set to true, `libcurl`, which is used to implement
-the download functionality will print debugging information to `stderr`.
+the download functionality will print debugging information to `stderr`. If the
+`debug` option is set to a function accepting two `String` arguments, then the
+verbose option is ignored and instead the data that would have been printed to
+`stderr` is passed to the `debug` callback with `type` and `message` arguments.
+The `type` argument indicates what kind of event has occurred, and is one of:
+`TEXT`, `HEADER IN`, `HEADER OUT`, `DATA IN`, `DATA OUT`, `SSL DATA IN` or `SSL
+DATA OUT`. The `message` argument is the description of the debug event.
 """
 function download(
     url        :: AbstractString,
@@ -216,6 +224,7 @@ function download(
     timeout    :: Real = Inf,
     progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
+    debug      :: Union{Function, Nothing} = nothing,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
     arg_write(output) do output
@@ -227,8 +236,9 @@ function download(
             timeout = timeout,
             progress = progress,
             verbose = verbose,
+            debug = debug,
             downloader = downloader,
-        )
+        )::Response
         status_ok(response.proto, response.status) && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
@@ -245,6 +255,7 @@ end
         [ timeout = <none>, ]
         [ progress = <none>, ]
         [ verbose = false, ]
+        [ debug = <none>, ]
         [ throw = true, ]
         [ downloader = <default>, ]
     ) -> Union{Response, RequestError}
@@ -257,6 +268,7 @@ end
         timeout    :: Real
         progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any
         verbose    :: Bool
+        debug      :: (type, message) --> Any
         throw      :: Bool
         downloader :: Downloader
 
@@ -287,6 +299,7 @@ function request(
     timeout    :: Real = Inf,
     progress   :: Union{Function, Nothing} = nothing,
     verbose    :: Bool = false,
+    debug      :: Union{Function, Nothing} = nothing,
     throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: Union{Response, RequestError}
@@ -305,6 +318,10 @@ function request(
     input = something(input, devnull)
     output = something(output, devnull)
     input_size = arg_read_size(input)
+    if input_size === nothing
+        # take input_size from content-length header if one is supplied
+        input_size = content_length(headers)
+    end
     progress = p_func(progress, input, output)
     arg_read(input) do input
         arg_write(output) do output
@@ -313,6 +330,7 @@ function request(
                 set_url(easy, url)
                 set_timeout(easy, timeout)
                 set_verbose(easy, verbose)
+                set_debug(easy, debug)
                 add_headers(easy, headers)
 
                 # libcurl does not set the default header reliably so set it
@@ -333,7 +351,7 @@ function request(
                         end
                     end
                 else
-                    set_body(easy, have_output)
+                    set_body(easy, have_output && method != "HEAD")
                 end
                 method !== nothing && set_method(easy, method)
                 progress !== nothing && enable_progress(easy)
@@ -391,8 +409,17 @@ end
 p_func(progress::Nothing, input::ArgRead, output::ArgWrite) = nothing
 
 arg_read_size(path::AbstractString) = filesize(path)
-arg_read_size(io::IOBuffer) = io.size - io.ptr + 1
+arg_read_size(io::Base.GenericIOBuffer) = bytesavailable(io)
 arg_read_size(::Base.DevNull) = 0
 arg_read_size(::Any) = nothing
+
+function content_length(headers::Union{AbstractVector, AbstractDict})
+    for (key, value) in headers
+        if lowercase(key) == "content-length" && isa(value, AbstractString)
+            return tryparse(Int, value)
+        end
+    end
+    return nothing
+end
 
 end # module
