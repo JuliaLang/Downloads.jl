@@ -1,7 +1,7 @@
 # Downloads
 
-[![Build Status](https://github.com/JuliaLang/Downloads.jl/workflows/CI/badge.svg)](https://github.com/JuliaLang/Downloads.jl/actions)
-[![Codecov](https://codecov.io/gh/JuliaLang/Downloads.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Downloads.jl)
+[![Build Status](https://github.com/JuliaLang/Downloads.jl/workflows/CI/badge.svg?branch=release-1.4)](https://github.com/JuliaLang/Downloads.jl/actions)
+[![Codecov](https://codecov.io/gh/JuliaLang/Downloads.jl/branch/release-1.4/graph/badge.svg)](https://codecov.io/gh/JuliaLang/Downloads.jl)
 
 The `Downloads` package provides a single function, `download`, which provides
 cross-platform, multi-protocol, in-process download functionality implemented
