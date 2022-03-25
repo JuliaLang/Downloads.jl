@@ -142,7 +142,7 @@ function set_timeout(easy::Easy, timeout::Real)
         timeout_ms = round(Clong, timeout * 1000)
         setopt(easy, CURLOPT_TIMEOUT_MS, timeout_ms)
     else
-        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
+        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
         setopt(easy, CURLOPT_TIMEOUT, timeout)
     end
 end
@@ -216,7 +216,7 @@ function get_protocol(easy::Easy)
     return nothing
 end
 
-status_2xx_ok(status::Integer) = 200 ≤ status < 300
+status_2xx_ok(status::Integer) = 200 ≤ status < 300
 status_zero_ok(status::Integer) = status == 0
 
 const PROTOCOL_STATUS = Dict{String,Function}(
