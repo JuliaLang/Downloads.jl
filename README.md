@@ -16,10 +16,10 @@ Julia 1.3 through 1.5 as well.
 
 The public API of `Downloads` consists of two functions and three types:
 
-- `download` — download a file from a URL, erroring if it can't be downloaded
+- `download` — download a file from a URL, erroring if it can't be downloaded
 - `request` — request a URL, returning a `Response` object indicating success
-- `Response` — a type capturing the status and other metadata about a request
-- `RequestError` — an error type thrown by `download` and `request` on error
+- `Response` — a type capturing the status and other metadata about a request
+- `RequestError` — an error type thrown by `download` and `request` on error
 - `Downloader` — an object encapsulating shared resources for downloading
 
 ### download
