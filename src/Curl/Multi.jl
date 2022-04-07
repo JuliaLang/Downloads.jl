@@ -163,14 +163,16 @@ function socket_callback(
         watcher_p = pointer_from_objref(watcher)
         @check curl_multi_assign(multi.handle, sock, watcher_p)
         task = @async while watcher.readable || watcher.writable # isopen(watcher)
-            events = try wait(watcher)
+            events = try
+                wait(watcher)
             catch err
                 err isa EOFError && return
-                rethrow()
+                err isa Base.IOError || rethrow()
+                FileWatching.FDEvent()
             end
             flags = CURL_CSELECT_IN  * isreadable(events) +
                     CURL_CSELECT_OUT * iswritable(events) +
-                    CURL_CSELECT_ERR * events.disconnect
+                    CURL_CSELECT_ERR * (events.disconnect || events.timedout)
             lock(multi.lock) do
                 watcher.readable || watcher.writable || return # !isopen
                 @check curl_multi_socket_action(multi.handle, sock, flags)
