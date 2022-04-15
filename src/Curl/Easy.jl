@@ -363,14 +363,14 @@ function seek_callback(
     origin :: Cint,
 )::Cint
     if origin != 0
-        @async @error("seek_callback: unsupported seek origin", origin)
+        @async @error("seek_callback: unsupported seek origin", origin, maxlog=10_000)
         return CURL_SEEKFUNC_CANTSEEK
     end
     easy = unsafe_pointer_to_objref(easy_p)::Easy
     easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
     try easy.seeker(offset)
     catch err
-        @async @error("seek_callback: seeker failed", err)
+        @async @error("seek_callback: seeker failed", err, maxlog=10_000)
         return CURL_SEEKFUNC_FAIL
     end
     return CURL_SEEKFUNC_OK
