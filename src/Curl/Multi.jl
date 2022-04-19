@@ -103,7 +103,7 @@ function check_multi_info(multi::Multi)
             easy.input = nothing
             notify(easy.ready)
         else
-            @async @error("curl_multi_info_read: unknown message", message, maxlog=10_000)
+            @async @error("curl_multi_info_read: unknown message", message, maxlog=1_000)
         end
     end
 end
@@ -132,7 +132,7 @@ function timer_callback(
             end
         end
     elseif timeout_ms != -1
-        @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=10_000)
+        @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=1_000)
         return -1
     end
     return 0
@@ -146,7 +146,7 @@ function socket_callback(
     watcher_p :: Ptr{Cvoid},
 )::Cint
     if action ∉ (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT, CURL_POLL_REMOVE)
-        @async @error("socket_callback: unexpected action", action, maxlog=10_000)
+        @async @error("socket_callback: unexpected action", action, maxlog=1_000)
         return -1
     end
     multi = unsafe_pointer_to_objref(multi_p)::Multi
