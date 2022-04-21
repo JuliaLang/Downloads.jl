@@ -45,16 +45,16 @@ macro check(ex::Expr)
 
                 If neither of these is the case and Julia is picking up a too old libcurl, please file an issue with the `Downloads.jl` package.
 
-                """
+                """ maxlog=1_000
             elseif !iszero(r)
-                @async @error $prefix * string(r)
+                @async @error $prefix * string(r) maxlog=1_000
             end
             r
         end
     else
         quote
             r = $(esc(ex))
-            iszero(r) || @async @error $prefix * string(r)
+            iszero(r) || @async @error $prefix * string(r) maxlog=1_000
             r
         end
     end
