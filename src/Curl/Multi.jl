@@ -103,7 +103,7 @@ function check_multi_info(multi::Multi)
             easy.input = nothing
             notify(easy.ready)
         else
-            @async @error("curl_multi_info_read: unknown message", message)
+            @async @error("curl_multi_info_read: unknown message", message, maxlog=1_000)
         end
     end
 end
@@ -132,7 +132,7 @@ function timer_callback(
             end
         end
     elseif timeout_ms != -1
-        @async @error("timer_callback: invalid timeout value", timeout_ms)
+        @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=1_000)
         return -1
     end
     return 0
@@ -146,7 +146,7 @@ function socket_callback(
     watcher_p :: Ptr{Cvoid},
 )::Cint
     if action ∉ (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT, CURL_POLL_REMOVE)
-        @async @error("socket_callback: unexpected action", action)
+        @async @error("socket_callback: unexpected action", action, maxlog=1_000)
         return -1
     end
     multi = unsafe_pointer_to_objref(multi_p)::Multi
@@ -163,14 +163,16 @@ function socket_callback(
         watcher_p = pointer_from_objref(watcher)
         @check curl_multi_assign(multi.handle, sock, watcher_p)
         task = @async while watcher.readable || watcher.writable # isopen(watcher)
-            events = try wait(watcher)
+            events = try
+                wait(watcher)
             catch err
                 err isa EOFError && return
-                rethrow()
+                err isa Base.IOError || rethrow()
+                FileWatching.FDEvent()
             end
             flags = CURL_CSELECT_IN  * isreadable(events) +
                     CURL_CSELECT_OUT * iswritable(events) +
-                    CURL_CSELECT_ERR * events.disconnect
+                    CURL_CSELECT_ERR * (events.disconnect || events.timedout)
             lock(multi.lock) do
                 watcher.readable || watcher.writable || return # !isopen
                 @check curl_multi_socket_action(multi.handle, sock, flags)

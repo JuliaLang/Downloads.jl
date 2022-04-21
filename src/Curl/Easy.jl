@@ -142,7 +142,7 @@ function set_timeout(easy::Easy, timeout::Real)
         timeout_ms = round(Clong, timeout * 1000)
         setopt(easy, CURLOPT_TIMEOUT_MS, timeout_ms)
     else
-        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
+        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
         setopt(easy, CURLOPT_TIMEOUT, timeout)
     end
 end
@@ -183,7 +183,7 @@ end
 function get_protocol(easy::Easy)
     proto_ref = Ref{Clong}()
     r = @check curl_easy_getinfo(easy.handle, CURLINFO_PROTOCOL, proto_ref)
-    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or us a Julia build that uses its own `libcurl` library.")
+    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or use a Julia build that uses its own `libcurl` library.")
     proto = proto_ref[]
     proto == CURLPROTO_DICT   && return "dict"
     proto == CURLPROTO_FILE   && return "file"
@@ -216,7 +216,7 @@ function get_protocol(easy::Easy)
     return nothing
 end
 
-status_2xx_ok(status::Integer) = 200 ≤ status < 300
+status_2xx_ok(status::Integer) = 200 ≤ status < 300
 status_zero_ok(status::Integer) = status == 0
 
 const PROTOCOL_STATUS = Dict{String,Function}(
@@ -232,7 +232,7 @@ const PROTOCOL_STATUS = Dict{String,Function}(
     "pop3s"  => status_2xx_ok,
     "rtsp"   => status_2xx_ok,
     "scp"    => status_zero_ok,
-    "sftp"   => status_2xx_ok,
+    "sftp"   => status_zero_ok,
     "smtp"   => status_2xx_ok,
     "smtps"  => status_2xx_ok,
 )
@@ -363,14 +363,14 @@ function seek_callback(
     origin :: Cint,
 )::Cint
     if origin != 0
-        @async @error("seek_callback: unsupported seek origin", origin)
+        @async @error("seek_callback: unsupported seek origin", origin, maxlog=1_000)
         return CURL_SEEKFUNC_CANTSEEK
     end
     easy = unsafe_pointer_to_objref(easy_p)::Easy
     easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
     try easy.seeker(offset)
     catch err
-        @async @error("seek_callback: seeker failed", err)
+        @async @error("seek_callback: seeker failed", err, maxlog=1_000)
         return CURL_SEEKFUNC_FAIL
     end
     return CURL_SEEKFUNC_OK
