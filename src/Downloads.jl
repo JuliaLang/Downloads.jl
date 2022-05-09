@@ -254,12 +254,10 @@ function download(
         end
 
         # add extension based on url if header wasn't helpful
-        if do_reloc
-            ext = last(splitext(response.url))
-            if !isempty(ext)
-                mv(res, res*ext; force=true)
-                res = res*ext
-            end
+        ext = last(splitext(response.url))
+        if !isempty(ext)
+            mv(res, res*ext; force=true)
+            res = res*ext
         end
     end
     res
