@@ -130,7 +130,7 @@ struct RequestError <: Exception
 end
 
 function Base.showerror(io::IO, err::RequestError)
-    print(io, "$(error_message(err)) while requesting $(err.url)")
+    print(io, "RequestError: $(error_message(err)) while requesting $(err.url)")
 end
 
 function error_message(err::RequestError)
