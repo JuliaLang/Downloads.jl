@@ -1,19 +1,14 @@
 mutable struct Multi
     lock   :: ReentrantLock
     handle :: Ptr{Cvoid}
-    timer  :: Ptr{Cvoid}
+    timer  :: Union{Nothing,Timer}
     easies :: Vector{Easy}
     grace  :: UInt64
 
     function Multi(grace::Integer = typemax(UInt64))
-        timer = jl_malloc(Base._sizeof_uv_timer)
-        uv_timer_init(timer)
-        multi = new(ReentrantLock(), C_NULL, timer, Easy[], grace)
-        finalizer(multi) do multi
-            uv_timer_stop(multi.timer)
-            uv_close(multi.timer, cglobal(:jl_free))
-            done!(multi)
-        end
+        multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
+        finalizer(done!, multi)
+        return multi
     end
 end
 
@@ -22,29 +17,33 @@ function init!(multi::Multi)
     multi.handle = curl_multi_init()
     add_callbacks(multi)
     set_defaults(multi)
+    nothing
 end
 
 function done!(multi::Multi)
-    multi.handle == C_NULL && return
-    curl_multi_cleanup(multi.handle)
+    stoptimer!(multi)
+    handle = multi.handle
+    handle == C_NULL && return
     multi.handle = C_NULL
+    curl_multi_cleanup(handle)
+    nothing
+end
+
+function stoptimer!(multi::Multi)
+    t = multi.timer
+    if t !== nothing
+        multi.timer = nothing
+        close(t)
+    end
+    nothing
 end
 
 # adding & removing easy handles
-
-function cleanup_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
-    ## TODO: use a member access API
-    multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
-    multi = unsafe_pointer_to_objref(multi_p)::Multi
-    done!(multi)
-    return
-end
 
 function add_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         if isempty(multi.easies)
             preserve_handle(multi)
-            uv_timer_stop(multi.timer) # stop grace timer
         end
         push!(multi.easies, easy)
         init!(multi)
@@ -56,12 +55,18 @@ function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         @check curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
-        !isempty(multi.easies) && return
-        cleanup_cb = @cfunction(cleanup_callback, Cvoid, (Ptr{Cvoid},))
+        isempty(multi.easies) || return
+        stoptimer!(multi)
         if multi.grace <= 0
             done!(multi)
         elseif 0 < multi.grace < typemax(multi.grace)
-            uv_timer_start(multi.timer, cleanup_cb, multi.grace, 0)
+            multi.timer = Timer(multi.grace/1000) do timer
+                lock(multi.lock) do
+                    multi.timer === timer || return
+                    multi.timer = nothing
+                    done!(multi)
+                end
+            end
         end
         unpreserve_handle(multi)
     end
@@ -73,7 +78,7 @@ function set_defaults(multi::Multi)
     # currently no defaults
 end
 
-# libuv callbacks
+# multi-socket handle state updates
 
 struct CURLMsg
    msg  :: CURLMSG
@@ -81,7 +86,6 @@ struct CURLMsg
    code :: CURLcode
 end
 
-# should already be locked
 function check_multi_info(multi::Multi)
     while true
         p = curl_multi_info_read(multi.handle, Ref{Cint}())
@@ -99,41 +103,17 @@ function check_multi_info(multi::Multi)
             easy.input = nothing
             notify(easy.ready)
         else
-            @async @error("curl_multi_info_read: unknown message", message)
+            @async @error("curl_multi_info_read: unknown message", message, maxlog=1_000)
         end
     end
 end
 
-function event_callback(
-    uv_poll_p :: Ptr{Cvoid},
-    status    :: Cint,
-    events    :: Cint,
-)::Cvoid
-    ## TODO: use a member access API
-    multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_poll_p))
-    multi = unsafe_pointer_to_objref(multi_p)::Multi
-    sock_p = uv_poll_p + Base._sizeof_uv_poll
-    sock = unsafe_load(convert(Ptr{curl_socket_t}, sock_p))
-    flags = 0
-    events & UV_READABLE != 0 && (flags |= CURL_CSELECT_IN)
-    events & UV_WRITABLE != 0 && (flags |= CURL_CSELECT_OUT)
-    lock(multi.lock) do
-        @check curl_multi_socket_action(multi.handle, sock, flags)
-        check_multi_info(multi)
-    end
-end
-
-function timeout_callback(uv_timer_p::Ptr{Cvoid})::Cvoid
-    ## TODO: use a member access API
-    multi_p = unsafe_load(convert(Ptr{Ptr{Cvoid}}, uv_timer_p))
-    multi = unsafe_pointer_to_objref(multi_p)::Multi
-    lock(multi.lock) do
-        @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-        check_multi_info(multi)
-    end
-end
-
 # curl callbacks
+
+function do_multi(multi::Multi)
+    @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+    check_multi_info(multi)
+end
 
 function timer_callback(
     multi_h    :: Ptr{Cvoid},
@@ -142,18 +122,17 @@ function timer_callback(
 )::Cint
     multi = unsafe_pointer_to_objref(multi_p)::Multi
     @assert multi_h == multi.handle
-    if timeout_ms == 0
-        lock(multi.lock) do
-            @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
-            check_multi_info(multi)
+    stoptimer!(multi)
+    if timeout_ms >= 0
+        multi.timer = Timer(timeout_ms/1000) do timer
+            lock(multi.lock) do
+                multi.timer === timer || return
+                multi.timer = nothing
+                do_multi(multi)
+            end
         end
-    elseif timeout_ms >= 0
-        timeout_cb = @cfunction(timeout_callback, Cvoid, (Ptr{Cvoid},))
-        uv_timer_start(multi.timer, timeout_cb, max(1, timeout_ms), 0)
-    elseif timeout_ms == -1
-        uv_timer_stop(multi.timer)
-    else
-        @async @error("timer_callback: invalid timeout value", timeout_ms)
+    elseif timeout_ms != -1
+        @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=1_000)
         return -1
     end
     return 0
@@ -164,46 +143,50 @@ function socket_callback(
     sock      :: curl_socket_t,
     action    :: Cint,
     multi_p   :: Ptr{Cvoid},
-    uv_poll_p :: Ptr{Cvoid},
+    watcher_p :: Ptr{Cvoid},
 )::Cint
-    multi = unsafe_pointer_to_objref(multi_p)::Multi
-    if action in (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT)
-        if uv_poll_p == C_NULL
-            uv_poll_p = uv_poll_alloc()
-            uv_poll_init(uv_poll_p, sock)
-            ## TODO: use a member access API
-            unsafe_store!(convert(Ptr{Ptr{Cvoid}}, uv_poll_p), multi_p)
-            sock_p = uv_poll_p + Base._sizeof_uv_poll
-            unsafe_store!(convert(Ptr{curl_socket_t}, sock_p), sock)
-            lock(multi.lock) do
-                @check curl_multi_assign(multi.handle, sock, uv_poll_p)
-            end
-        end
-        events = 0
-        action != CURL_POLL_IN  && (events |= UV_WRITABLE)
-        action != CURL_POLL_OUT && (events |= UV_READABLE)
-        event_cb = @cfunction(event_callback, Cvoid, (Ptr{Cvoid}, Cint, Cint))
-        uv_poll_start(uv_poll_p, events, event_cb)
-    elseif action == CURL_POLL_REMOVE
-        if uv_poll_p != C_NULL
-            uv_poll_stop(uv_poll_p)
-            uv_close(uv_poll_p, cglobal(:jl_free))
-            lock(multi.lock) do
-                @check curl_multi_assign(multi.handle, sock, C_NULL)
-            end
-        end
-    else
-        @async @error("socket_callback: unexpected action", action)
+    if action ∉ (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT, CURL_POLL_REMOVE)
+        @async @error("socket_callback: unexpected action", action, maxlog=1_000)
         return -1
     end
+    multi = unsafe_pointer_to_objref(multi_p)::Multi
+    if watcher_p != C_NULL
+        old_watcher = unsafe_pointer_to_objref(watcher_p)::FDWatcher
+        @check curl_multi_assign(multi.handle, sock, C_NULL)
+        unpreserve_handle(old_watcher)
+    end
+    if action in (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT)
+        readable = action in (CURL_POLL_IN,  CURL_POLL_INOUT)
+        writable = action in (CURL_POLL_OUT, CURL_POLL_INOUT)
+        watcher = FDWatcher(OS_HANDLE(sock), readable, writable)
+        preserve_handle(watcher)
+        watcher_p = pointer_from_objref(watcher)
+        @check curl_multi_assign(multi.handle, sock, watcher_p)
+        task = @async while watcher.readable || watcher.writable # isopen(watcher)
+            events = try
+                wait(watcher)
+            catch err
+                err isa EOFError && return
+                err isa Base.IOError || rethrow()
+                FileWatching.FDEvent()
+            end
+            flags = CURL_CSELECT_IN  * isreadable(events) +
+                    CURL_CSELECT_OUT * iswritable(events) +
+                    CURL_CSELECT_ERR * (events.disconnect || events.timedout)
+            lock(multi.lock) do
+                watcher.readable || watcher.writable || return # !isopen
+                @check curl_multi_socket_action(multi.handle, sock, flags)
+                check_multi_info(multi)
+            end
+        end
+        @isdefined(errormonitor) && errormonitor(task)
+    end
+    @isdefined(old_watcher) && close(old_watcher)
     return 0
 end
 
 function add_callbacks(multi::Multi)
-    # stash multi handle pointer in timer
     multi_p = pointer_from_objref(multi)
-    ## TODO: use a member access API
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, multi.timer), multi_p)
 
     # set timer callback
     timer_cb = @cfunction(timer_callback, Cint, (Ptr{Cvoid}, Clong, Ptr{Cvoid}))

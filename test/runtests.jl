@@ -105,6 +105,33 @@ include("setup.jl")
         rm(file)
     end
 
+    @testset "put from io" begin
+        url = "$server/put"
+        file = tempname()
+        write(file, "Hello, world!")
+        len = filesize(file)
+        for headers in [Pair{String,String}[], ["Content-Length" => "$len"]]
+            open(file) do io
+                events = Pair{String,String}[]
+                debug(type, msg) = push!(events, type => msg)
+                resp, json = request_json(url, input=io, debug=debug, headers=headers)
+                @test json["url"] == url
+                @test json["data"] == read(file, String)
+                header_out(hdr::String) = any(events) do (type, msg)
+                    type == "HEADER OUT" && hdr in map(lowercase, split(msg, "\r\n"))
+                end
+                chunked = header_out("transfer-encoding: chunked")
+                content_length = header_out("content-length: $len")
+                if isempty(headers)
+                    @test chunked && !content_length
+                else
+                    @test !chunked && content_length
+                end
+            end
+        end
+        rm(file)
+    end
+
     @testset "redirected get" begin
         url = "$server/get"
         redirect = "$server/redirect-to?url=$(url_escape(url))"
@@ -192,6 +219,22 @@ include("setup.jl")
                     @test header(json["headers"], "User-Agent") == Curl.USER_AGENT
                 end
             end
+        end
+    end
+
+    @testset "debug callback" begin
+        url = "$server/get"
+        events = Pair{String,String}[]
+        resp = request(url, debug = (type, msg) -> push!(events, type => msg))
+        @test resp isa Response && resp.status == 200
+        @test any(events) do (type, msg)
+            type == "TEXT" && startswith(msg, "Connected to ")
+        end
+        @test any(events) do (type, msg)
+            type == "HEADER OUT" && contains(msg, r"^HEAD /get HTTP/[\d\.+]+\s$"m)
+        end
+        @test any(events) do (type, msg)
+            type == "HEADER IN" && contains(msg, r"^HTTP/[\d\.]+ 200 OK\s*$")
         end
     end
 
@@ -335,7 +378,7 @@ include("setup.jl")
 
     @testset "request API" begin
         @testset "basic request usage" begin
-            for status in (200, 300, 400)
+            for status in [200, 400, 404]
                 url = "$server/status/$status"
                 resp, body = request_body(url)
                 @test resp.url == url
@@ -425,9 +468,10 @@ include("setup.jl")
     delete!(ENV, "JULIA_SSL_NO_VERIFY_HOSTS")
 
     @testset "bad TLS" begin
+        badssl = "badssl.julialang.org"
         urls = [
-            "https://wrong.host.badssl.com"
-            "https://untrusted-root.badssl.com"
+            "https://untrusted-root.$(badssl)"
+            "https://wrong.host.$(badssl)"
         ]
         @testset "bad TLS is rejected" for url in urls
             resp = request(url, throw=false)
@@ -437,7 +481,9 @@ include("setup.jl")
         @testset "easy hook work-around" begin
             local url
             easy_hook = (easy, info) -> begin
-                Curl.set_ssl_verify(easy, false)
+                # don't verify anything (this disables SNI also)
+                Curl.setopt(easy, Curl.CURLOPT_SSL_VERIFYPEER, false)
+                Curl.setopt(easy, Curl.CURLOPT_SSL_VERIFYHOST, false)
                 @test info.url == url
             end
             # downloader-specific easy hook
@@ -459,7 +505,10 @@ include("setup.jl")
             Downloads.DOWNLOADER[] = nothing
             Downloads.EASY_HOOK[] = nothing
         end
-        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**.badssl.com"
+        ENV["JULIA_SSL_NO_VERIFY_HOSTS"] = "**.$(badssl)"
+        # wrong host *should* still fail, but may not due
+        # to libcurl bugs when using non-OpenSSL backends:
+        pop!(urls) # <= skip wrong host URL entirely here
         @testset "SSL no verify override" for url in urls
             resp = request(url, throw=false)
             @test resp isa Response
@@ -500,6 +549,16 @@ include("setup.jl")
         dl = Downloader(grace=1)
         Downloads.download("https://httpbingo.org/drip"; downloader=dl)
         Downloads.download("https://httpbingo.org/drip"; downloader=dl)
+    end
+
+    @testset "Input body size" begin
+        # Test mechanism to detect the body size from the request(; input) argument
+        @test Downloads.arg_read_size(@__FILE__) == filesize(@__FILE__)
+        @test Downloads.arg_read_size(IOBuffer("αa")) == 3
+        @test Downloads.arg_read_size(IOBuffer(codeunits("αa"))) == 3  # Issue #142
+        @test Downloads.arg_read_size(devnull) == 0
+        @test Downloads.content_length(["Accept"=>"*/*",]) === nothing
+        @test Downloads.content_length(["Accept"=>"*/*", "Content-Length"=>"100"]) == 100
     end
 end
 

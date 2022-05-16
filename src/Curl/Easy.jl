@@ -9,6 +9,7 @@ mutable struct Easy
     res_hdrs :: Vector{String}
     code     :: CURLcode
     errbuf   :: Vector{UInt8}
+    debug    :: Union{Function,Nothing}
 end
 
 const EMPTY_BYTE_VECTOR = UInt8[]
@@ -25,6 +26,7 @@ function Easy()
         String[],
         typemax(CURLcode),
         zeros(UInt8, CURL_ERROR_SIZE),
+        nothing,
     )
     finalizer(done!, easy)
     add_callbacks(easy)
@@ -106,6 +108,19 @@ function set_verbose(easy::Easy, verbose::Bool)
     setopt(easy, CURLOPT_VERBOSE, verbose)
 end
 
+function set_debug(easy::Easy, debug::Function)
+    hasmethod(debug, Tuple{String,String}) ||
+        throw(ArgumentError("debug callback must take (::String, ::String)"))
+    easy.debug = debug
+    add_debug_callback(easy)
+    set_verbose(easy, true)
+end
+
+function set_debug(easy::Easy, debug::Nothing)
+    easy.debug = nothing
+    remove_debug_callback(easy)
+end
+
 function set_body(easy::Easy, body::Bool)
     setopt(easy, CURLOPT_NOBODY, !body)
 end
@@ -116,7 +131,7 @@ function set_upload_size(easy::Easy, size::Integer)
 end
 
 function set_seeker(seeker::Function, easy::Easy)
-    add_seek_callbacks(easy)
+    add_seek_callback(easy)
     easy.seeker = seeker
 end
 
@@ -127,7 +142,7 @@ function set_timeout(easy::Easy, timeout::Real)
         timeout_ms = round(Clong, timeout * 1000)
         setopt(easy, CURLOPT_TIMEOUT_MS, timeout_ms)
     else
-        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
+        timeout = timeout ≤ typemax(Clong) ? round(Clong, timeout) : Clong(0)
         setopt(easy, CURLOPT_TIMEOUT, timeout)
     end
 end
@@ -159,7 +174,7 @@ function enable_progress(easy::Easy, on::Bool=true)
 end
 
 function enable_upload(easy::Easy)
-    add_upload_callbacks(easy::Easy)
+    add_upload_callback(easy::Easy)
     setopt(easy, CURLOPT_UPLOAD, true)
 end
 
@@ -168,7 +183,7 @@ end
 function get_protocol(easy::Easy)
     proto_ref = Ref{Clong}()
     r = @check curl_easy_getinfo(easy.handle, CURLINFO_PROTOCOL, proto_ref)
-    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or us a Julia build that uses its own `libcurl` library.")
+    r == CURLE_UNKNOWN_OPTION && error("The `libcurl` version you are using is too old and does not include the `CURLINFO_PROTOCOL` feature. Please upgrade or use a Julia build that uses its own `libcurl` library.")
     proto = proto_ref[]
     proto == CURLPROTO_DICT   && return "dict"
     proto == CURLPROTO_FILE   && return "file"
@@ -201,7 +216,7 @@ function get_protocol(easy::Easy)
     return nothing
 end
 
-status_2xx_ok(status::Integer) = 200 ≤ status < 300
+status_2xx_ok(status::Integer) = 200 ≤ status < 300
 status_zero_ok(status::Integer) = status == 0
 
 const PROTOCOL_STATUS = Dict{String,Function}(
@@ -217,7 +232,7 @@ const PROTOCOL_STATUS = Dict{String,Function}(
     "pop3s"  => status_2xx_ok,
     "rtsp"   => status_2xx_ok,
     "scp"    => status_zero_ok,
-    "sftp"   => status_2xx_ok,
+    "sftp"   => status_zero_ok,
     "smtp"   => status_2xx_ok,
     "smtps"  => status_2xx_ok,
 )
@@ -228,6 +243,17 @@ function status_ok(proto::AbstractString, status::Integer)
     error("Downloads.jl doesn't know the correct request success criterion for $proto: you can use `request` and check the `status` field yourself or open an issue with Downloads with details an example URL that you are trying to download.")
 end
 status_ok(proto::Nothing, status::Integer) = false
+
+function info_type(type::curl_infotype)
+    type == 0 ? "TEXT" :
+    type == 1 ? "HEADER IN" :
+    type == 2 ? "HEADER OUT" :
+    type == 3 ? "DATA IN" :
+    type == 4 ? "DATA OUT" :
+    type == 5 ? "SSL DATA IN" :
+    type == 6 ? "SSL DATA OUT" :
+                "UNKNOWN"
+end
 
 function get_effective_url(easy::Easy)
     url_ref = Ref{Ptr{Cchar}}()
@@ -337,14 +363,14 @@ function seek_callback(
     origin :: Cint,
 )::Cint
     if origin != 0
-        @async @error("seek_callback: unsupported seek origin", origin)
+        @async @error("seek_callback: unsupported seek origin", origin, maxlog=1_000)
         return CURL_SEEKFUNC_CANTSEEK
     end
     easy = unsafe_pointer_to_objref(easy_p)::Easy
     easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
     try easy.seeker(offset)
     catch err
-        @async @error("seek_callback: seeker failed", err)
+        @async @error("seek_callback: seeker failed", err, maxlog=1_000)
         return CURL_SEEKFUNC_FAIL
     end
     return CURL_SEEKFUNC_OK
@@ -376,6 +402,19 @@ function progress_callback(
     return 0
 end
 
+function debug_callback(
+    handle :: Ptr{Cvoid},
+    type   :: curl_infotype,
+    data   :: Ptr{Cchar},
+    size   :: Csize_t,
+    easy_p :: Ptr{Cvoid},
+)::Cint
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    @assert easy.handle == handle
+    easy.debug(info_type(type), unsafe_string(data, size))
+    return 0
+end
+
 function add_callbacks(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
@@ -404,7 +443,7 @@ function add_callbacks(easy::Easy)
     setopt(easy, CURLOPT_XFERINFODATA, easy_p)
 end
 
-function add_upload_callbacks(easy::Easy)
+function add_upload_callback(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
 
@@ -415,7 +454,7 @@ function add_upload_callbacks(easy::Easy)
     setopt(easy, CURLOPT_READDATA, easy_p)
 end
 
-function add_seek_callbacks(easy::Easy)
+function add_seek_callback(easy::Easy)
     # pointer to easy object
     easy_p = pointer_from_objref(easy)
 
@@ -424,4 +463,20 @@ function add_seek_callbacks(easy::Easy)
         Cint, (Ptr{Cvoid}, curl_off_t, Cint))
     setopt(easy, CURLOPT_SEEKFUNCTION, seek_cb)
     setopt(easy, CURLOPT_SEEKDATA, easy_p)
+end
+
+function add_debug_callback(easy::Easy)
+    # pointer to easy object
+    easy_p = pointer_from_objref(easy)
+
+    # set debug callback
+    debug_cb = @cfunction(debug_callback,
+        Cint, (Ptr{Cvoid}, curl_infotype, Ptr{Cchar}, Csize_t, Ptr{Cvoid}))
+    setopt(easy, CURLOPT_DEBUGFUNCTION, debug_cb)
+    setopt(easy, CURLOPT_DEBUGDATA, easy_p)
+end
+
+function remove_debug_callback(easy::Easy)
+    setopt(easy, CURLOPT_DEBUGFUNCTION, C_NULL)
+    setopt(easy, CURLOPT_DEBUGDATA, C_NULL)
 end
