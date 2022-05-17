@@ -305,7 +305,6 @@ function request(
 ) :: Union{Response, RequestError}
     if downloader === nothing
         lock(DOWNLOAD_LOCK) do
-            yield() # let other downloads finish
             downloader = DOWNLOADER[]
             if downloader === nothing
                 downloader = DOWNLOADER[] = Downloader()
