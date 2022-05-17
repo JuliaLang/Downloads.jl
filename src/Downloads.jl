@@ -303,13 +303,12 @@ function request(
     throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: Union{Response, RequestError}
-    lock(DOWNLOAD_LOCK) do
-        yield() # let other downloads finish
-        downloader isa Downloader && return
-        while true
+    if downloader === nothing
+        lock(DOWNLOAD_LOCK) do
             downloader = DOWNLOADER[]
-            downloader isa Downloader && return
-            DOWNLOADER[] = Downloader()
+            if downloader === nothing
+                downloader = DOWNLOADER[] = Downloader()
+            end
         end
     end
     local response
