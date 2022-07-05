@@ -130,7 +130,7 @@ struct RequestError <: Exception
 end
 
 function Base.showerror(io::IO, err::RequestError)
-    print(io, "$(error_message(err)) while requesting $(err.url)")
+    print(io, "RequestError: $(error_message(err)) while requesting $(err.url)")
 end
 
 function error_message(err::RequestError)
@@ -341,13 +341,12 @@ function request(
     throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: Union{Response, RequestError}
-    lock(DOWNLOAD_LOCK) do
-        yield() # let other downloads finish
-        downloader isa Downloader && return
-        while true
+    if downloader === nothing
+        lock(DOWNLOAD_LOCK) do
             downloader = DOWNLOADER[]
-            downloader isa Downloader && return
-            DOWNLOADER[] = Downloader()
+            if downloader === nothing
+                downloader = DOWNLOADER[] = Downloader()
+            end
         end
     end
     local response
