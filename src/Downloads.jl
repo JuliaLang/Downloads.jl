@@ -97,6 +97,8 @@ struct Response
     headers :: Vector{Pair{String,String}}
 end
 
+Curl.status_ok(response::Response) = status_ok(response.proto, response.status)
+
 """
     struct RequestError <: ErrorException
         url      :: String
@@ -239,7 +241,7 @@ function download(
             debug = debug,
             downloader = downloader,
         )::Response
-        status_ok(response.proto, response.status) && return output
+        status_ok(response) && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
 end
