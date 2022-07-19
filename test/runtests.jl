@@ -437,7 +437,7 @@ include("setup.jl")
         end
 
         @testset "progress" begin
-            url = "https://httpbingo.org/drip"
+            url = "$server/drip"
             progress = []
             dl_funcs = [
                 download,
@@ -547,8 +547,8 @@ include("setup.jl")
 
     @testset "grace cleanup" begin
         dl = Downloader(grace=1)
-        Downloads.download("https://httpbingo.org/drip"; downloader=dl)
-        Downloads.download("https://httpbingo.org/drip"; downloader=dl)
+        Downloads.download("$server/drip"; downloader=dl)
+        Downloads.download("$server/drip"; downloader=dl)
     end
 
     @testset "Input body size" begin
