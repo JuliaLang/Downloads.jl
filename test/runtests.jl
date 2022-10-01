@@ -201,11 +201,11 @@ include("setup.jl")
         end
 
         @testset "delete default header" begin
-        headers = [
-            "Accept"     => nothing
-            "User-Agent" => nothing
-        ]
-        json = download_json(url, headers = headers)
+            headers = [
+                "Accept"     => nothing
+                "User-Agent" => nothing
+            ]
+            json = download_json(url, headers = headers)
             @test !("Accept" in keys(json["headers"]))
             @test !("User-Agent" in keys(json["headers"]))
         end
