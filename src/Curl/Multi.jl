@@ -41,6 +41,7 @@ end
 # adding & removing easy handles
 
 function add_handle(multi::Multi, easy::Easy)
+    connect_semaphore_acquire(easy)
     lock(multi.lock) do
         if isempty(multi.easies)
             preserve_handle(multi)
@@ -70,6 +71,7 @@ function remove_handle(multi::Multi, easy::Easy)
         end
         unpreserve_handle(multi)
     end
+    connect_semaphore_release(easy)
 end
 
 # multi-socket options

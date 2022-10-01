@@ -10,6 +10,7 @@ mutable struct Easy
     code     :: CURLcode
     errbuf   :: Vector{UInt8}
     debug    :: Union{Function,Nothing}
+    consem   :: Bool
 end
 
 const EMPTY_BYTE_VECTOR = UInt8[]
@@ -27,6 +28,7 @@ function Easy()
         typemax(CURLcode),
         zeros(UInt8, CURL_ERROR_SIZE),
         nothing,
+        false,
     )
     finalizer(done!, easy)
     add_callbacks(easy)
@@ -35,10 +37,35 @@ function Easy()
 end
 
 function done!(easy::Easy)
+    connect_semaphore_release(easy)
     easy.handle == C_NULL && return
     curl_easy_cleanup(easy.handle)
     curl_slist_free_all(easy.req_hdrs)
     easy.handle = C_NULL
+    return
+end
+
+# connect semaphore
+
+# This semaphore limits the number of requests that can be in the connecting
+# state at any given time, globally. Throttling this prevents libcurl from
+# trying to start too many DNS resolver threads concurrently. It also helps
+# ensure that not-yet-started requests get ßa chance to make some progress
+# before adding more events from new requests to the system's workload.
+
+const CONNECT_SEMAPHORE = Base.Semaphore(16) # empirically chosen (ie guessed)
+
+function connect_semaphore_acquire(easy::Easy)
+    @assert !easy.consem
+    Base.acquire(CONNECT_SEMAPHORE)
+    easy.consem = true
+    return
+end
+
+function connect_semaphore_release(easy::Easy)
+    easy.consem || return
+    Base.release(CONNECT_SEMAPHORE)
+    easy.consem = false
     return
 end
 
@@ -309,6 +336,18 @@ end
 
 # callbacks
 
+function prereq_callback(
+    easy_p           :: Ptr{Cvoid},
+    conn_remote_ip   :: Ptr{Cchar},
+    conn_local_ip    :: Ptr{Cchar},
+    conn_remote_port :: Cint,
+    conn_local_port  :: Cint,
+)::Cint
+    easy = unsafe_pointer_to_objref(easy_p)::Easy
+    connect_semaphore_release(easy)
+    return 0
+end
+
 function header_callback(
     data   :: Ptr{Cchar},
     size   :: Csize_t,
@@ -423,6 +462,12 @@ function add_callbacks(easy::Easy)
     # pointer to error buffer
     errbuf_p = pointer(easy.errbuf)
     setopt(easy, CURLOPT_ERRORBUFFER, errbuf_p)
+
+    # set pre-request callback
+    prereq_cb = @cfunction(prereq_callback,
+        Cint, (Ptr{Cvoid}, Ptr{Cchar}, Ptr{Cchar}, Cint, Cint))
+    setopt(easy, CURLOPT_PREREQFUNCTION, prereq_cb)
+    setopt(easy, CURLOPT_PREREQDATA, easy_p)
 
     # set header callback
     header_cb = @cfunction(header_callback,
