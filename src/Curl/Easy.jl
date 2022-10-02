@@ -354,11 +354,16 @@ function header_callback(
     count  :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Csize_t
-    easy = unsafe_pointer_to_objref(easy_p)::Easy
-    n = size * count
-    hdr = unsafe_string(data, n)
-    push!(easy.res_hdrs, hdr)
-    return n
+    try
+        easy = unsafe_pointer_to_objref(easy_p)::Easy
+        n = size * count
+        hdr = unsafe_string(data, n)
+        push!(easy.res_hdrs, hdr)
+        return n
+    catch err
+        @async @error("header_callback: unexpected error", err=err, maxlog=1_000)
+        return typemax(Csize_t)
+    end
 end
 
 # feed data to read_callback
@@ -380,20 +385,25 @@ function read_callback(
     count  :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Csize_t
-    easy = unsafe_pointer_to_objref(easy_p)::Easy
-    buf = easy.input
-    if buf === nothing
-        notify(easy.ready)
-        return 0 # done uploading
+    try
+        easy = unsafe_pointer_to_objref(easy_p)::Easy
+        buf = easy.input
+        if buf === nothing
+            notify(easy.ready)
+            return 0 # done uploading
+        end
+        if isempty(buf)
+            notify(easy.ready)
+            return CURL_READFUNC_PAUSE # wait for more data
+        end
+        n = min(size * count, length(buf))
+        ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), data, buf, n)
+        deleteat!(buf, 1:n)
+        return n
+    catch err
+        @async @error("read_callback: unexpected error", err=err, maxlog=1_000)
+        return CURL_READFUNC_ABORT
     end
-    if isempty(buf)
-        notify(easy.ready)
-        return CURL_READFUNC_PAUSE # wait for more data
-    end
-    n = min(size * count, length(buf))
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), data, buf, n)
-    deleteat!(buf, 1:n)
-    return n
 end
 
 function seek_callback(
@@ -401,18 +411,23 @@ function seek_callback(
     offset :: curl_off_t,
     origin :: Cint,
 )::Cint
-    if origin != 0
-        @async @error("seek_callback: unsupported seek origin", origin, maxlog=1_000)
-        return CURL_SEEKFUNC_CANTSEEK
-    end
-    easy = unsafe_pointer_to_objref(easy_p)::Easy
-    easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
-    try easy.seeker(offset)
+    try
+        if origin != 0
+            @async @error("seek_callback: unsupported seek origin", origin, maxlog=1_000)
+            return CURL_SEEKFUNC_CANTSEEK
+        end
+        easy = unsafe_pointer_to_objref(easy_p)::Easy
+        easy.seeker === nothing && return CURL_SEEKFUNC_CANTSEEK
+        try easy.seeker(offset)
+        catch err
+            @async @error("seek_callback: seeker failed", err, maxlog=1_000)
+            return CURL_SEEKFUNC_FAIL
+        end
+        return CURL_SEEKFUNC_OK
     catch err
-        @async @error("seek_callback: seeker failed", err, maxlog=1_000)
+        @async @error("seek_callback: unexpected error", err=err, maxlog=1_000)
         return CURL_SEEKFUNC_FAIL
     end
-    return CURL_SEEKFUNC_OK
 end
 
 function write_callback(
@@ -421,12 +436,17 @@ function write_callback(
     count  :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Csize_t
-    easy = unsafe_pointer_to_objref(easy_p)::Easy
-    n = size * count
-    buf = Array{UInt8}(undef, n)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
-    put!(easy.output, buf)
-    return n
+    try
+        easy = unsafe_pointer_to_objref(easy_p)::Easy
+        n = size * count
+        buf = Array{UInt8}(undef, n)
+        ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
+        put!(easy.output, buf)
+        return n
+    catch err
+        @async @error("write_callback: unexpected error", err=err, maxlog=1_000)
+        return typemax(Csize_t)
+    end
 end
 
 function progress_callback(
@@ -436,9 +456,14 @@ function progress_callback(
     ul_total :: curl_off_t,
     ul_now   :: curl_off_t,
 )::Cint
-    easy = unsafe_pointer_to_objref(easy_p)::Easy
-    put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
-    return 0
+    try
+        easy = unsafe_pointer_to_objref(easy_p)::Easy
+        put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
+        return 0
+    catch err
+        @async @error("progress_callback: unexpected error", err=err, maxlog=1_000)
+        return -1
+    end
 end
 
 function debug_callback(
@@ -448,10 +473,15 @@ function debug_callback(
     size   :: Csize_t,
     easy_p :: Ptr{Cvoid},
 )::Cint
-    easy = unsafe_pointer_to_objref(easy_p)::Easy
-    @assert easy.handle == handle
-    easy.debug(info_type(type), unsafe_string(data, size))
-    return 0
+    try
+        easy = unsafe_pointer_to_objref(easy_p)::Easy
+        @assert easy.handle == handle
+        easy.debug(info_type(type), unsafe_string(data, size))
+        return 0
+    catch err
+        @async @error("debug_callback: unexpected error", err=err, maxlog=1_000)
+        return -1
+    end
 end
 
 function add_callbacks(easy::Easy)
