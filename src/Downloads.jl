@@ -20,7 +20,7 @@ using ArgTools
 include("Curl/Curl.jl")
 using .Curl
 
-export download, request, Downloader, Response, RequestError
+export download, request, Downloader, Response, RequestError, default_downloader!
 
 ## public API types ##
 
@@ -421,6 +421,23 @@ function content_length(headers::Union{AbstractVector, AbstractDict})
         end
     end
     return nothing
+end
+
+"""
+    default_downloader!(
+        downloader = <none>
+    ) 
+
+        downloader :: Downloader
+
+Set the default `Downloader`. If no argument is provided, resets the default downloader so that a fresh one is created the next time the default downloader is needed.
+"""
+function default_downloader!(
+    downloader :: Union{Downloader, Nothing} = nothing
+)
+    lock(DOWNLOAD_LOCK) do
+        DOWNLOADER[] = downloader
+    end
 end
 
 end # module

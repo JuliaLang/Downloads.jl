@@ -14,10 +14,11 @@ Julia 1.3 through 1.5 as well.
 
 ## API
 
-The public API of `Downloads` consists of two functions and three types:
+The public API of `Downloads` consists of three functions and three types:
 
 - `download` — download a file from a URL, erroring if it can't be downloaded
 - `request` — request a URL, returning a `Response` object indicating success
+- `default_downloader!` - set the default `Downloader` object
 - `Response` — a type capturing the status and other metadata about a request
 - `RequestError` — an error type thrown by `download` and `request` on error
 - `Downloader` — an object encapsulating shared resources for downloading
@@ -127,6 +128,18 @@ Note that unlike `download` which throws an error if the requested URL could not
 be downloaded (indicated by non-2xx status code), `request` returns a `Response`
 object no matter what the status code of the response is. If there is an error
 with getting a response at all, then a `RequestError` is thrown or returned.
+
+### default_downloader!
+
+```jl
+    default_downloader!(
+        downloader = <none>
+    ) 
+```
+- `downloader :: Downloader`
+
+Set the default `Downloader`. If no argument is provided, resets the default downloader 
+so that a fresh one is created the next time the default downloader is needed.
 
 ### Response
 
