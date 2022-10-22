@@ -97,6 +97,8 @@ struct Response
     headers :: Vector{Pair{String,String}}
 end
 
+Curl.status_ok(response::Response) = status_ok(response.proto, response.status)
+
 """
     struct RequestError <: ErrorException
         url      :: String
@@ -198,7 +200,7 @@ The `timeout` keyword argument specifies a timeout for the download in seconds,
 with a resolution of milliseconds. By default no timeout is set, but this can
 also be explicitly requested by passing a timeout value of `Inf`.
 
-If the `progress` keyword argument is provided, it must be a callback funtion
+If the `progress` keyword argument is provided, it must be a callback function
 which will be called whenever there are updates about the size and status of the
 ongoing download. The callback must take two integer arguments: `total` and
 `now` which are the total size of the download in bytes, and the number of bytes
@@ -242,7 +244,7 @@ function download(
             debug = debug,
             downloader = downloader,
         )::Response
-        status_ok(response.proto, response.status) && return output
+        status_ok(response) && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
     # get file suffix right based on headers
@@ -312,7 +314,7 @@ end
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
-reponse is written to `output` if specified and discarded otherwise. For HTTP/S
+response is written to `output` if specified and discarded otherwise. For HTTP/S
 requests, if an `input` stream is given, a `PUT` request is made; otherwise if
 an `output` stream is given, a `GET` request is made; if neither is given a
 `HEAD` request is made. For other protocols, appropriate default methods are

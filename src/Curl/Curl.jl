@@ -33,6 +33,8 @@ using LibCURL: curl_off_t, libcurl
 # constants that LibCURL should have but doesn't
 const CURLE_PEER_FAILED_VERIFICATION = 60
 const CURLSSLOPT_REVOKE_BEST_EFFORT = 1 << 3
+const CURLOPT_PREREQFUNCTION = 20000 + 312
+const CURLOPT_PREREQDATA = 10000 + 313
 
 # these are incorrectly defined on Windows by LibCURL:
 if Sys.iswindows()
