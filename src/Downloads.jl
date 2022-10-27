@@ -20,7 +20,7 @@ using ArgTools
 include("Curl/Curl.jl")
 using .Curl
 
-export download, request, Downloader, Response, RequestError, default_downloader!
+export download, request, Downloader, Response, RequestError, default_downloader!, pushhook!, deletehook!
 
 ## public API types ##
 
@@ -73,6 +73,44 @@ It is expected to be function taking two arguments: an `Easy` struct and an
 `info` NamedTuple with names `url`, `method` and `headers`. 
 """
 const EASY_HOOK = Ref{Union{Function, Nothing}}(nothing)
+
+## Allow for a set of global hooks that can customize each download (via setting parameters on the 
+## `Easy` object associated with a request 
+const HookKey = Int
+current_key = 0
+GlobalHookEntry = Tuple{HookKey, Function}
+const GLOBAL_HOOK_LOCK = ReentrantLock() 
+const GLOBAL_HOOKS = Array{GlobalHookEntry,1}(undef, 0)
+
+## Add hook
+function pushhook!(hook::Function) :: HookKey
+    global current_key
+    key = -1
+    lock(GLOBAL_HOOK_LOCK) do
+        key = current_key
+        push!(GLOBAL_HOOKS, (key, hook))
+        current_key += 1
+    end
+    return key
+end
+
+function deletehook!(key::HookKey)
+    keep = x -> x[1] != key
+    lock(GLOBAL_HOOK_LOCK) do
+        count(keep, GLOBAL_HOOKS) < length(GLOBAL_HOOKS) || 
+          warn("Downloads.jl: Hook key $(key) not found in global hooks")
+        filter!(keep, GLOBAL_HOOKS)
+    end
+end
+
+function apply_global_hooks(easy::Easy, info::NamedTuple) 
+    lock(GLOBAL_HOOK_LOCK) do
+        for (_,h) in GLOBAL_HOOKS
+            h(easy, info)
+        end
+    end
+end
+
 
 """
     struct Response
@@ -367,6 +405,8 @@ function request(
                 progress !== nothing && enable_progress(easy)
                 set_ca_roots(downloader, easy)
                 info = (url = url, method = method, headers = headers)
+                
+                apply_global_hooks(easy, info)
                 easy_hook(downloader, easy, info)
 
                 # do the request
