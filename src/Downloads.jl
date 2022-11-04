@@ -178,6 +178,7 @@ end
         [ verbose = false, ]
         [ debug = <none>, ]
         [ downloader = <default>, ]
+        [ username = <none>, ]
     ) -> output
 
         url        :: AbstractString
@@ -189,6 +190,7 @@ end
         verbose    :: Bool
         debug      :: (type, message) --> Any
         downloader :: Downloader
+        username   :: AbstractString
 
 Download a file from the given url, saving it to `output` or if not specified, a
 temporary path. The `output` can also be an `IO` handle, in which case the body
@@ -253,6 +255,7 @@ function download(
     verbose    :: Bool = false,
     debug      :: Union{Function, Nothing} = nothing,
     downloader :: Union{Downloader, Nothing} = nothing,
+    username   :: Union{AbstractString, Nothing} = nothing,
 ) :: ArgWrite
     arg_write(output) do output
         response = request(
@@ -265,6 +268,7 @@ function download(
             verbose = verbose,
             debug = debug,
             downloader = downloader,
+            username = username,
         )::Response
         status_ok(response) && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
@@ -285,6 +289,7 @@ end
         [ debug = <none>, ]
         [ throw = true, ]
         [ downloader = <default>, ]
+        [ username = <none>, ]
     ) -> Union{Response, RequestError}
 
         url        :: AbstractString
@@ -298,6 +303,7 @@ end
         debug      :: (type, message) --> Any
         throw      :: Bool
         downloader :: Downloader
+        username   :: AbstractString
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
@@ -329,6 +335,7 @@ function request(
     debug      :: Union{Function, Nothing} = nothing,
     throw      :: Bool = true,
     downloader :: Union{Downloader, Nothing} = nothing,
+    username   :: Union{AbstractString, Nothing} = nothing,
 ) :: Union{Response, RequestError}
     if downloader === nothing
         lock(DOWNLOAD_LOCK) do
@@ -358,6 +365,10 @@ function request(
                 set_verbose(easy, verbose)
                 set_debug(easy, debug)
                 add_headers(easy, headers)
+
+                if !isnothing(username)
+                    set_username(easy, username)
+                end
 
                 # libcurl does not set the default header reliably so set it
                 # explicitly unless user has specified it, xref
