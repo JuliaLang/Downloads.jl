@@ -7,6 +7,8 @@ More generally, the module exports functions and types that provide lower-level 
 for file downloading:
 - [`download`](@ref) — download a file from a URL, erroring if it can't be downloaded
 - [`request`](@ref) — request a URL, returning a `Response` object indicating success
+- [`pushhook!`](@ref) — add a hook which allows for customizing downloading parameters
+- [`deletehook!`](@ref) — remove a previously added parameter customization hook
 - [`Response`](@ref) — a type capturing the status and other metadata about a request
 - [`RequestError`](@ref) — an error type thrown by `download` and `request` on error
 - [`Downloader`](@ref) — an object encapsulating shared resources for downloading
@@ -77,23 +79,67 @@ const EASY_HOOK = Ref{Union{Function, Nothing}}(nothing)
 ## Allow for a set of global hooks that can customize each download (via setting parameters on the 
 ## `Easy` object associated with a request 
 const HookKey = Int
-current_key = 0
+CURRENT_KEY = 0
 GlobalHookEntry = Tuple{HookKey, Function}
 const GLOBAL_HOOK_LOCK = ReentrantLock() 
 const GLOBAL_HOOKS = Array{GlobalHookEntry,1}(undef, 0)
 
 ## Add hook
-function pushhook!(hook::Function) :: HookKey
-    global current_key
-    key = -1
-    lock(GLOBAL_HOOK_LOCK) do
-        key = current_key
-        push!(GLOBAL_HOOKS, (key, hook))
-        current_key += 1
-    end
-    return key
+"""
+    pushhook!(hook) -> key
+
+    hook       :: Function
+    key        :: HookKey
+Add a hook to customize download parameters for all downloads.  
+
+The signature `hook` should be `(easy::Easy, info::Dict) -> Nothing``. 
+Mulitple hooks can be added with repeated calls to `pushhook!`.  Hooks are 
+applied in the order they were added. 
+
+The returned `key` maybe used to remove a previously added `hook` cf. [deletehook!](@ref)
+
+Examples:
+```jl
+# define hook
+hook = (easy, info) -> begin
+    # allow for long pauses during downloads (perhaps for malware scanning)
+    setopt(easy, Downloads.Curl.CURLOPT_LOW_SPEED_LIMIT, 1   #= bytes   =#)
+    setopt(easy, Downloads.Curl.CURLOPT_LOW_SPEED_TIME , 200 #= seconds =#)
+
+    # other possibilities
+      # set ca_roots
+      # disable certificate verification
+      # block or rewrite URLs
+
 end
 
+# add hook
+key = pushhook!(hook)
+
+# would fail with default download parameters...
+download("https://httpbingo.julialang.org/delay/40", "test.txt")
+
+# cleanup
+deletehook!(key)
+```
+"""
+function pushhook!(hook::Function) :: HookKey
+    global CURRENT_KEY
+    key = -1
+    lock(GLOBAL_HOOK_LOCK) do
+        key = CURRENT_KEY
+        push!(GLOBAL_HOOKS, (key, hook))
+        CURRENT_KEY += 1
+    end
+    key
+end
+
+"""
+    deletehook!(key)
+    key        :: HookKey
+
+Remove a hook previously added with [`pushhook!`](@ref).  
+"""
 function deletehook!(key::HookKey)
     keep = x -> x[1] != key
     lock(GLOBAL_HOOK_LOCK) do
@@ -101,6 +147,7 @@ function deletehook!(key::HookKey)
           warn("Downloads.jl: Hook key $(key) not found in global hooks")
         filter!(keep, GLOBAL_HOOKS)
     end
+    nothing
 end
 
 function apply_global_hooks(easy::Easy, info::NamedTuple) 
@@ -109,6 +156,7 @@ function apply_global_hooks(easy::Easy, info::NamedTuple)
             h(easy, info)
         end
     end
+    nothing
 end
 
 
