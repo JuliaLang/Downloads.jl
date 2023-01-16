@@ -191,7 +191,7 @@ function socket_callback(
         end
         @isdefined(old_watcher) && close(old_watcher)
         return 0
-    catch
+    catch err
         @async @error("socket_callback: unexpected error", err=err, maxlog=1_000)
         return -1
     end
