@@ -194,3 +194,36 @@ garbage collected, whichever comes first. If the grace period is set to zero,
 all resources will be cleaned up immediately as soon as there are no more
 ongoing downloads in progress. If the grace period is set to `Inf` then
 resources are not cleaned up until `Downloader` is garbage collected.
+
+
+## Mutual TLS using Downloads
+
+```jl
+using Downloads: Curl, Downloader, download
+
+easy_hook = (easy, info) -> begin
+    Curl.setopt(easy, Curl.CURLOPT_SSLKEY,  "client.key")
+    Curl.setopt(easy, Curl.CURLOPT_SSLCERT, "client.crt")
+end
+downloader = Downloader()
+downloader.easy_hook = easy_hook
+
+download(url; downloader)
+```
+
+Here, client.key and client.crt are the private and public keys for the client.
+
+It’s also possible currently to make the default downloader use that hook by putting it into Downloads.EASY_HOOK. Here’s an example:
+
+```jl
+using Downloads: Downloads, Curl, download
+
+Downloads.EASY_HOOK[] = (easy, info) -> begin
+    Curl.setopt(easy, Curl.CURLOPT_SSLKEY,  "client.key")
+    Curl.setopt(easy, Curl.CURLOPT_SSLCERT, "client.crt")
+end
+
+download(url)
+```
+
+There is no difference between usage on Windows, MacOS, and Linux.
