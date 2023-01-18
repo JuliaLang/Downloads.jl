@@ -253,6 +253,32 @@ include("setup.jl")
         @test isempty(cookies)
     end
 
+    @testset "default_downloader!" begin
+        original = Downloads.DOWNLOADER[]
+        try
+            tripped = false
+            url = "$server/get"
+
+            downloader = Downloader()
+            downloader.easy_hook = (easy, info) -> tripped = true
+
+            # set default
+            default_downloader!(downloader)
+            _ = download_body(url)
+            @test tripped
+
+            #reset tripwire
+            tripped = false
+
+            # reset default
+            default_downloader!()
+            _ = download_body(url)
+            @test !tripped
+        finally
+            Downloads.DOWNLOADER[] = original
+        end
+    end
+
     @testset "netrc support" begin
         user = "gVvkQiHN62"
         passwd = "dlctfSMTno8n"
