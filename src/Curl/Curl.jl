@@ -93,8 +93,19 @@ function with_handle(f, handle::Union{Multi, Easy})
     end
 end
 
+"""
+    setopt(easy::Easy, option::Integer, value)
+
+Sets options on libcurl's "easy" interface. `option` corresponds to libcurl options on https://curl.se/libcurl/c/curl_easy_setopt.html
+"""
 setopt(easy::Easy, option::Integer, value) =
     @check curl_easy_setopt(easy.handle, option, value)
+
+"""
+    setopt(multi::Multi, option::Integer, value)
+
+Sets options on libcurl's "multi" interface. `option` corresponds to libcurl options on https://curl.se/libcurl/c/curl_multi_setopt.html
+"""
 setopt(multi::Multi, option::Integer, value) =
     @check curl_multi_setopt(multi.handle, option, value)
 
