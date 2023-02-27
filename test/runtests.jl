@@ -228,7 +228,7 @@ include("setup.jl")
         resp = request(url, debug = (type, msg) -> push!(events, type => msg))
         @test resp isa Response && resp.status == 200
         @test any(events) do (type, msg)
-            type == "TEXT" && startswith(msg, "Connected to ")
+            type == "TEXT" && startswith(msg, r"(Connected to |Connection.* left intact)")
         end
         @test any(events) do (type, msg)
             type == "HEADER OUT" && contains(msg, r"^HEAD /get HTTP/[\d\.+]+\s$"m)
