@@ -14,10 +14,11 @@ Julia 1.3 through 1.5 as well.
 
 ## API
 
-The public API of `Downloads` consists of two functions and three types:
+The public API of `Downloads` consists of three functions and three types:
 
 - `download` — download a file from a URL, erroring if it can't be downloaded
 - `request` — request a URL, returning a `Response` object indicating success
+- `default_downloader!` - set the default `Downloader` object
 - `Response` — a type capturing the status and other metadata about a request
 - `RequestError` — an error type thrown by `download` and `request` on error
 - `Downloader` — an object encapsulating shared resources for downloading
@@ -128,6 +129,18 @@ be downloaded (indicated by non-2xx status code), `request` returns a `Response`
 object no matter what the status code of the response is. If there is an error
 with getting a response at all, then a `RequestError` is thrown or returned.
 
+### default_downloader!
+
+```jl
+    default_downloader!(
+        downloader = <none>
+    ) 
+```
+- `downloader :: Downloader`
+
+Set the default `Downloader`. If no argument is provided, resets the default downloader 
+so that a fresh one is created the next time the default downloader is needed.
+
 ### Response
 
 ```jl
@@ -194,3 +207,36 @@ garbage collected, whichever comes first. If the grace period is set to zero,
 all resources will be cleaned up immediately as soon as there are no more
 ongoing downloads in progress. If the grace period is set to `Inf` then
 resources are not cleaned up until `Downloader` is garbage collected.
+
+
+## Mutual TLS using Downloads
+
+```jl
+using Downloads: Curl, Downloader, download
+
+easy_hook = (easy, info) -> begin
+    Curl.setopt(easy, Curl.CURLOPT_SSLKEY,  "client.key")
+    Curl.setopt(easy, Curl.CURLOPT_SSLCERT, "client.crt")
+end
+downloader = Downloader()
+downloader.easy_hook = easy_hook
+
+download(url; downloader)
+```
+
+Here, client.key and client.crt are the private and public keys for the client.
+
+It’s also possible currently to make the default downloader use that hook by putting it into Downloads.EASY_HOOK. Here’s an example:
+
+```jl
+using Downloads: Downloads, Curl, download
+
+Downloads.EASY_HOOK[] = (easy, info) -> begin
+    Curl.setopt(easy, Curl.CURLOPT_SSLKEY,  "client.key")
+    Curl.setopt(easy, Curl.CURLOPT_SSLCERT, "client.crt")
+end
+
+download(url)
+```
+
+There is no difference between usage on Windows, MacOS, and Linux.

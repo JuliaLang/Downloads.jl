@@ -248,7 +248,7 @@ include("setup.jl")
         resp = request(url, debug = (type, msg) -> push!(events, type => msg))
         @test resp isa Response && resp.status == 200
         @test any(events) do (type, msg)
-            type == "TEXT" && startswith(msg, "Connected to ")
+            type == "TEXT" && startswith(msg, r"(Connected to |Connection.* left intact)")
         end
         @test any(events) do (type, msg)
             type == "HEADER OUT" && contains(msg, r"^HEAD /get HTTP/[\d\.+]+\s$"m)
@@ -271,6 +271,32 @@ include("setup.jl")
         cookie_url = "$server/cookies"
         cookies = download_json(cookie_url, downloader=downloader)
         @test isempty(cookies)
+    end
+
+    @testset "default_downloader!" begin
+        original = Downloads.DOWNLOADER[]
+        try
+            tripped = false
+            url = "$server/get"
+
+            downloader = Downloader()
+            downloader.easy_hook = (easy, info) -> tripped = true
+
+            # set default
+            default_downloader!(downloader)
+            _ = download_body(url)
+            @test tripped
+
+            #reset tripwire
+            tripped = false
+
+            # reset default
+            default_downloader!()
+            _ = download_body(url)
+            @test !tripped
+        finally
+            Downloads.DOWNLOADER[] = original
+        end
     end
 
     @testset "netrc support" begin

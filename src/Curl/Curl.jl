@@ -69,7 +69,11 @@ function __init__()
 end
 
 const CURL_VERSION_INFO = unsafe_load(curl_version_info(CURLVERSION_NOW))
-const SSL_VERSION = unsafe_string(CURL_VERSION_INFO.ssl_version)
+if CURL_VERSION_INFO.ssl_version == Base.C_NULL
+    const SSL_VERSION = ""
+else
+    const SSL_VERSION = unsafe_string(CURL_VERSION_INFO.ssl_version)::String
+end
 const SYSTEM_SSL =
     Sys.isapple() && startswith(SSL_VERSION, "SecureTransport") ||
     Sys.iswindows() && startswith(SSL_VERSION, "Schannel")
@@ -93,8 +97,19 @@ function with_handle(f, handle::Union{Multi, Easy})
     end
 end
 
+"""
+    setopt(easy::Easy, option::Integer, value)
+
+Sets options on libcurl's "easy" interface. `option` corresponds to libcurl options on https://curl.se/libcurl/c/curl_easy_setopt.html
+"""
 setopt(easy::Easy, option::Integer, value) =
     @check curl_easy_setopt(easy.handle, option, value)
+
+"""
+    setopt(multi::Multi, option::Integer, value)
+
+Sets options on libcurl's "multi" interface. `option` corresponds to libcurl options on https://curl.se/libcurl/c/curl_multi_setopt.html
+"""
 setopt(multi::Multi, option::Integer, value) =
     @check curl_multi_setopt(multi.handle, option, value)
 

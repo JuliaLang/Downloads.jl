@@ -20,7 +20,7 @@ using ArgTools
 include("Curl/Curl.jl")
 using .Curl
 
-export download, request, Downloader, Response, RequestError
+export download, request, Downloader, Response, RequestError, default_downloader!
 
 ## public API types ##
 
@@ -63,6 +63,15 @@ end
 
 const DOWNLOAD_LOCK = ReentrantLock()
 const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
+
+"""
+`EASY_HOOK` is a modifable global hook to used as the default `easy_hook` on 
+new `Downloader` objects. This supplies a mechanism to set options for the 
+`Downloader` via `Curl.setopt`
+
+It is expected to be function taking two arguments: an `Easy` struct and an 
+`info` NamedTuple with names `url`, `method` and `headers`. 
+"""
 const EASY_HOOK = Ref{Union{Function, Nothing}}(nothing)
 
 """
@@ -459,6 +468,23 @@ function content_length(headers::Union{AbstractVector, AbstractDict})
         end
     end
     return nothing
+end
+
+"""
+    default_downloader!(
+        downloader = <none>
+    ) 
+
+        downloader :: Downloader
+
+Set the default `Downloader`. If no argument is provided, resets the default downloader so that a fresh one is created the next time the default downloader is needed.
+"""
+function default_downloader!(
+    downloader :: Union{Downloader, Nothing} = nothing
+)
+    lock(DOWNLOAD_LOCK) do
+        DOWNLOADER[] = downloader
+    end
 end
 
 end # module
