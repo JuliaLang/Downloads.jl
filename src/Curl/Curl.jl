@@ -65,9 +65,6 @@ using Base: OS_HANDLE, preserve_handle, unpreserve_handle
 
 include("utils.jl")
 
-function __init__()
-end
-
 const CURL_VERSION_INFO = unsafe_load(curl_version_info(CURLVERSION_NOW))
 if CURL_VERSION_INFO.ssl_version == Base.C_NULL
     const SSL_VERSION = ""
