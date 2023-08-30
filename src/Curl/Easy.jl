@@ -369,9 +369,11 @@ end
 # feed data to read_callback
 function upload_data(easy::Easy, input::IO)
     while true
-        data = eof(input) ? nothing : readavailable(input)
-        easy.input === nothing && break
-        easy.input = data
+        if easy.input === nothing || isempty(easy.input)
+            data = eof(input) ? nothing : readavailable(input)
+            easy.input === nothing && break
+            easy.input = data
+        end
         curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
         wait(easy.ready)
         easy.input === nothing && break
