@@ -371,7 +371,7 @@ function upload_data(easy::Easy, input::IO)
     while true
         data = eof(input) ? nothing : readavailable(input)
         easy.input === nothing && break
-        reset(easy.input)
+        reset(easy.ready)
         easy.input = data
         curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
         wait(easy.ready)
