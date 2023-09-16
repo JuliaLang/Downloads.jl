@@ -3,9 +3,11 @@ on:
   pull_request:
     branches:
       - master
+      - release-1.4
   push:
     branches:
       - master
+      - release-1.4
     tags: '*'
 jobs:
   test:
@@ -15,7 +17,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.3'
           - '1' # automatically expands to the latest stable 1.x release of Julia.
           - 'nightly'
         os:
