@@ -3,11 +3,9 @@ on:
   pull_request:
     branches:
       - master
-      - release-1.4
   push:
     branches:
       - master
-      - release-1.4
     tags: '*'
 jobs:
   test:
