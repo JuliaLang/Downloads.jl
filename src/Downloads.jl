@@ -65,12 +65,12 @@ const DOWNLOAD_LOCK = ReentrantLock()
 const DOWNLOADER = Ref{Union{Downloader, Nothing}}(nothing)
 
 """
-`EASY_HOOK` is a modifable global hook to used as the default `easy_hook` on 
-new `Downloader` objects. This supplies a mechanism to set options for the 
+`EASY_HOOK` is a modifable global hook to used as the default `easy_hook` on
+new `Downloader` objects. This supplies a mechanism to set options for the
 `Downloader` via `Curl.setopt`
 
-It is expected to be function taking two arguments: an `Easy` struct and an 
-`info` NamedTuple with names `url`, `method` and `headers`. 
+It is expected to be function taking two arguments: an `Easy` struct and an
+`info` NamedTuple with names `url`, `method` and `headers`.
 """
 const EASY_HOOK = Ref{Union{Function, Nothing}}(nothing)
 
@@ -205,9 +205,11 @@ If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when
 downloading URLs with protocols that supports them, such as HTTP/S.
 
-The `timeout` keyword argument specifies a timeout for the download in seconds,
-with a resolution of milliseconds. By default no timeout is set, but this can
-also be explicitly requested by passing a timeout value of `Inf`.
+The `timeout` keyword argument specifies a timeout for the download to complete in
+seconds, with a resolution of milliseconds. By default no timeout is set, but this
+can also be explicitly requested by passing a timeout value of `Inf`. Separately,
+if 20 seconds elapse without receiving any data, the download will timeout. See
+extended help for how to disable this timeout.
 
 If the `progress` keyword argument is provided, it must be a callback function
 which will be called whenever there are updates about the size and status of the
@@ -226,6 +228,20 @@ verbose option is ignored and instead the data that would have been printed to
 The `type` argument indicates what kind of event has occurred, and is one of:
 `TEXT`, `HEADER IN`, `HEADER OUT`, `DATA IN`, `DATA OUT`, `SSL DATA IN` or `SSL
 DATA OUT`. The `message` argument is the description of the debug event.
+
+## Extended Help
+
+For further customization, use a [`Downloader`](@ref) and
+[`easy_hook`s](https://github.com/JuliaLang/Downloads.jl#mutual-tls-using-downloads).
+For example, to disable the 20 second timeout when no data is received, you may
+use the following:
+
+```jl
+downloader = Downloads.Downloader()
+downloader.easy_hook = (easy, info) -> Downloads.Curl.setopt(easy, Downloads.Curl.CURLOPT_LOW_SPEED_TIME, 0)
+
+Downloads.download("https://httpbingo.julialang.org/delay/30"; downloader)
+```
 """
 function download(
     url        :: AbstractString,
@@ -473,7 +489,7 @@ end
 """
     default_downloader!(
         downloader = <none>
-    ) 
+    )
 
         downloader :: Downloader
 
@@ -485,6 +501,17 @@ function default_downloader!(
     lock(DOWNLOAD_LOCK) do
         DOWNLOADER[] = downloader
     end
+end
+
+# Precompile
+let
+    d = Downloader(; grace=0.01)
+    download("file://" * @__FILE__; downloader=d)
+    # Ref https://github.com/JuliaLang/julia/issues/49513
+    # we wait for the grace task to finish
+    sleep(0.05)
+    precompile(Tuple{typeof(Downloads.download), String, String})
+    precompile(Tuple{typeof(Downloads.Curl.status_2xx_ok), Int64})
 end
 
 end # module
