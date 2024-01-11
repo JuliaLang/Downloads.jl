@@ -68,6 +68,9 @@ function remove_handle(multi::Multi, easy::Easy)
                     done!(multi)
                 end
             end
+            Base.atexit() do
+                close(multi.timer)
+            end
         end
         unpreserve_handle(multi)
     end
@@ -133,6 +136,9 @@ function timer_callback(
                     multi.timer = nothing
                     do_multi(multi)
                 end
+            end
+            Base.atexit() do
+                close(multi.timer)
             end
         elseif timeout_ms != -1
             @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=1_000)
