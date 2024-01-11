@@ -52,6 +52,12 @@ function add_handle(multi::Multi, easy::Easy)
     end
 end
 
+const timer_lock = Base.ReentrantLock()
+const timers = Timer[]
+Base.atexit() do
+    foreach(close, timers)
+end
+
 function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
         @check curl_multi_remove_handle(multi.handle, easy.handle)
@@ -68,9 +74,7 @@ function remove_handle(multi::Multi, easy::Easy)
                     done!(multi)
                 end
             end
-            Base.atexit() do
-                close(multi.timer)
-            end
+            @lock timer_lock push!(timers, multi.timer)
         end
         unpreserve_handle(multi)
     end
@@ -137,9 +141,7 @@ function timer_callback(
                     do_multi(multi)
                 end
             end
-            Base.atexit() do
-                close(multi.timer)
-            end
+            @lock timer_lock push!(timers, multi.timer)
         elseif timeout_ms != -1
             @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=1_000)
             return -1
