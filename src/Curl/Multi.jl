@@ -8,7 +8,7 @@ mutable struct Multi
     function Multi(grace::Integer = typemax(UInt64))
         multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
         finalizer(done!, multi)
-        @lock MULTIS_LOCK push!(filter!(m -> m.value isa Multi, MULTIS), WeakRef(multi))
+        Base.@lock MULTIS_LOCK push!(filter!(m -> m.value isa Multi, MULTIS), WeakRef(multi))
         return multi
     end
 end
@@ -58,7 +58,7 @@ const MULTIS = WeakRef[]
 # Close any Multis and their timers at exit that haven't been finalized by then
 Base.atexit() do
     while true
-        w = @lock MULTIS_LOCK (isempty(MULTIS) ? nothing : pop!(MULTIS))
+        w = Base.@lock MULTIS_LOCK (isempty(MULTIS) ? nothing : pop!(MULTIS))
         w === nothing && break
         w = w.value
         w isa Multi && done!(w)
