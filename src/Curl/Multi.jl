@@ -8,12 +8,7 @@ mutable struct Multi
     function Multi(grace::Integer = typemax(UInt64))
         multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
         finalizer(done!, multi)
-        lock(MULTIS_LOCK)
-        try
-            push!(MULTIS, WeakRef(multi))
-        catch
-            unlock(MULTIS_LOCK)
-        end
+        @lock MULTIS_LOCK push!(MULTIS, WeakRef(multi))
         return multi
     end
 end
