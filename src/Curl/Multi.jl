@@ -8,6 +8,7 @@ mutable struct Multi
     function Multi(grace::Integer = typemax(UInt64))
         multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
         finalizer(done!, multi)
+        @lock MULTIS_LOCK push!(MULTIS, WeakRef(multi))
         return multi
     end
 end
@@ -52,10 +53,13 @@ function add_handle(multi::Multi, easy::Easy)
     end
 end
 
-const TIMERS_LOCK = Base.ReentrantLock()
-const TIMERS = Timer[]
+const MULTIS_LOCK = Base.ReentrantLock()
+const MULTIS = WeakRef[]
+# Close any Multis and their timers at exit that haven't been finalized by then
 Base.atexit() do
-    foreach(close, TIMERS_LOCK)
+    for w in MULTIS
+        w.value isa Multi && done!(w.value)
+    end
 end
 
 function remove_handle(multi::Multi, easy::Easy)
@@ -74,7 +78,6 @@ function remove_handle(multi::Multi, easy::Easy)
                     done!(multi)
                 end
             end
-            @lock TIMER_LOCK push!(TIMERS, multi.timer)
         end
         unpreserve_handle(multi)
     end
@@ -141,7 +144,6 @@ function timer_callback(
                     do_multi(multi)
                 end
             end
-            @lock TIMER_LOCK push!(TIMERS, multi.timer)
         elseif timeout_ms != -1
             @async @error("timer_callback: invalid timeout value", timeout_ms, maxlog=1_000)
             return -1
