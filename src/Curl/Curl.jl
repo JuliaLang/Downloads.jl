@@ -26,6 +26,7 @@ export
         add_handle,
         remove_handle
 
+using Base: @lock
 using LibCURL
 using LibCURL: curl_off_t, libcurl
 # not exported: https://github.com/JuliaWeb/LibCURL.jl/issues/87
