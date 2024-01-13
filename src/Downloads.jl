@@ -467,11 +467,8 @@ end
 
 # Precompile
 let
-    d = Downloader(; grace=0.01)
+    d = Downloader()
     download("file://" * @__FILE__; downloader=d)
-    # Ref https://github.com/JuliaLang/julia/issues/49513
-    # we wait for the grace task to finish
-    sleep(0.05)
     precompile(Tuple{typeof(Downloads.download), String, String})
     precompile(Tuple{typeof(Downloads.Curl.status_2xx_ok), Int64})
 end
