@@ -468,7 +468,8 @@ end
 # Precompile
 let
     d = Downloader()
-    download("file://" * @__FILE__; downloader=d)
+    f = mktemp()[1]
+    download("file://" * f; downloader=d)
     precompile(Tuple{typeof(Downloads.download), String, String})
     precompile(Tuple{typeof(Downloads.Curl.status_2xx_ok), Int64})
 end
