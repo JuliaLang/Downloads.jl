@@ -465,13 +465,4 @@ function default_downloader!(
     end
 end
 
-# Precompile
-let
-    d = Downloader()
-    f = mktemp()[1]
-    download("file://" * f; downloader=d)
-    precompile(Tuple{typeof(Downloads.download), String, String})
-    precompile(Tuple{typeof(Downloads.Curl.status_2xx_ok), Int64})
-end
-
 end # module
