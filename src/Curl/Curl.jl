@@ -6,6 +6,7 @@ export
         set_url,
         set_method,
         set_verbose,
+        set_username,
         set_debug,
         set_body,
         set_upload_size,

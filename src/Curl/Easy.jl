@@ -135,6 +135,10 @@ function set_verbose(easy::Easy, verbose::Bool)
     setopt(easy, CURLOPT_VERBOSE, verbose)
 end
 
+function set_username(easy::Easy, username::AbstractString)
+    setopt(easy, CURLOPT_USERNAME, username)
+end
+
 function set_debug(easy::Easy, debug::Function)
     hasmethod(debug, Tuple{String,String}) ||
         throw(ArgumentError("debug callback must take (::String, ::String)"))
