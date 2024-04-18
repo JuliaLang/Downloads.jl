@@ -51,7 +51,8 @@ function grace_ms(grace::Real)
 end
 
 function easy_hook(downloader::Downloader, easy::Easy, info::NamedTuple)
-    downloader.easy_hook !== nothing && downloader.easy_hook(easy, info)
+    hook = downloader.easy_hook
+    hook !== nothing && Base.invokelatest(hook, easy, info)
 end
 
 get_ca_roots() = Curl.SYSTEM_SSL ? ca_roots() : ca_roots_path()
