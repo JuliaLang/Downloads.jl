@@ -466,7 +466,7 @@ function default_downloader!(
 end
 
 # Precompile
-let
+if Base.generating_output()
     d = Downloader()
     f = mktemp()[1]
     download("file://" * f; downloader=d)
