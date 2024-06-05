@@ -34,6 +34,7 @@ download(url, [ output = tempname() ];
     [ verbose = false, ]
     [ debug = <none>, ]
     [ downloader = <default>, ]
+    [ username = <none>, ]
 ) -> output
 ```
 - `url        :: AbstractString`
@@ -45,6 +46,7 @@ download(url, [ output = tempname() ];
 - `verbose    :: Bool`
 - `debug      :: (type, message) --> Any`
 - `downloader :: Downloader`
+- `username   :: AbstractString`
 
 Download a file from the given url, saving it to `output` or if not specified, a
 temporary path. The `output` can also be an `IO` handle, in which case the body
@@ -97,6 +99,7 @@ request(url;
     [ debug = <none>, ]
     [ throw = true, ]
     [ downloader = <default>, ]
+    [ username = <none>, ]
 ) -> Union{Response, RequestError}
 ```
 - `url        :: AbstractString`
@@ -110,6 +113,7 @@ request(url;
 - `debug      :: (type, message) --> Any`
 - `throw      :: Bool`
 - `downloader :: Downloader`
+- `username   :: AbstractString`
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
