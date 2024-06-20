@@ -67,6 +67,7 @@ include("utils.jl")
 
 function __init__()
     @check curl_global_init(CURL_GLOBAL_ALL)
+    Base.atexit(atexit_close_multis)
 end
 
 const CURL_VERSION_INFO = unsafe_load(curl_version_info(CURLVERSION_NOW))
