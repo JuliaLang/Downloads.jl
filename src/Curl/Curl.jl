@@ -103,15 +103,21 @@ end
 
 Sets options on libcurl's "easy" interface. `option` corresponds to libcurl options on https://curl.se/libcurl/c/curl_easy_setopt.html
 """
-setopt(easy::Easy, option::Integer, value) =
-    @check curl_easy_setopt(easy.handle, option, value)
+function setopt(easy::Easy, option::Integer, value)
+    res = @check curl_easy_setopt(easy.handle, option, value)
+    @debug "Easy setopt: $(option) = $(value) (res: $(res))"
+    return res
+end
 
 """
     setopt(multi::Multi, option::Integer, value)
 
 Sets options on libcurl's "multi" interface. `option` corresponds to libcurl options on https://curl.se/libcurl/c/curl_multi_setopt.html
 """
-setopt(multi::Multi, option::Integer, value) =
-    @check curl_multi_setopt(multi.handle, option, value)
+function setopt(multi::Multi, option::Integer, value)
+    res = @check curl_multi_setopt(multi.handle, option, value)
+    @debug "Multi setopt: $(option) = $(value) (res: $(res))"
+    return res
+end
 
 end # module
