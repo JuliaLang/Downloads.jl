@@ -72,6 +72,11 @@ end
 # request options
 
 function set_defaults(easy::Easy)
+    @info "setting defaults"
+    @show setopt(easy, CURLOPT_STDERR, Libc.FILE(Base.RawFD(2), "w").ptr)
+    @show setopt(easy, CURLOPT_BUFFERSIZE, 10_000_000)
+    @show setopt(easy, CURLOPT_VERBOSE, Int64(1))
+
     # curl options
     setopt(easy, CURLOPT_NOSIGNAL, true)
     setopt(easy, CURLOPT_FOLLOWLOCATION, true)
