@@ -475,4 +475,46 @@ let
     precompile(Tuple{typeof(Downloads.Curl.status_2xx_ok), Int64})
 end
 
+function benchmark(;
+    buffersizes=(1_000, 16_000, 100_000, 1_000_000, 10_000_000),
+    semaphore_sizes=(1, 16, 100, 1000),
+    n=5,
+    tasks=Threads.nthreads(),
+    repeats=3
+)
+    results = Array{Float64}(undef, length(buffersizes), length(semaphore_sizes), repeats)
+    for (i, buffersize) in enumerate(buffersizes)
+        for (j, sem) in enumerate(semaphore_sizes)
+            @info "step" buffersize sem
+            Downloads.Curl.CONNECT_SEMAPHORE = Base.Semaphore(sem)
+            Downloads.Curl.buffsize = buffersize
+            speeds = test(n, tasks, repeats)
+            results[i, j, :] .= speeds
+        end
+    end
+    return results
+end
+
+function test(n, tasks, times)
+    speeds = Float64[]
+    for _ in 1:times
+        fs = String[]
+        t = @elapsed @time @sync for task in 1:tasks
+            Threads.@spawn begin
+                downloader = Downloads.Downloader(; grace=5)
+                for i in 1:n
+                    f = Downloads.download("http://localhost:800$(task-1)/julia-1.10.4-macaarch64.dmg"; downloader, verbose=false)
+                    push!(fs, f)
+                end
+            end
+        end
+        rm.(fs)
+        f_sz = 163 # MB
+        speed = (f_sz * n * tasks) / t
+        println("$(speed) MB/s")
+        push!(speeds, speed)
+    end
+    return speeds
+end
+
 end # module

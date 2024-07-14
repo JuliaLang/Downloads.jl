@@ -53,7 +53,9 @@ end
 # ensure that not-yet-started requests get ßa chance to make some progress
 # before adding more events from new requests to the system's workload.
 
-const CONNECT_SEMAPHORE = Base.Semaphore(16) # empirically chosen (ie guessed)
+# variables for benchmarking
+global CONNECT_SEMAPHORE = Base.Semaphore(16) # empirically chosen (ie guessed)
+global buffsize = 16_000
 
 function connect_semaphore_acquire(easy::Easy)
     @assert !easy.consem
@@ -81,6 +83,7 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_NETRC, CURL_NETRC_OPTIONAL)
     setopt(easy, CURLOPT_COOKIEFILE, "")
     setopt(easy, CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT)
+    setopt(easy, CURLOPT_BUFFERSIZE, buffsize)
 
     # prevent downloads that hang forever:
     # - timeout no response on connect (more than 30s)
