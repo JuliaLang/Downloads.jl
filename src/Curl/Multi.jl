@@ -191,7 +191,6 @@ function socket_callback(
                     err isa Base.IOError || rethrow()
                     FileWatching.FDEvent()
                 end
-                watcher.readable || watcher.writable || return # !isopen
                 flags = CURL_CSELECT_IN  * isreadable(events) +
                         CURL_CSELECT_OUT * iswritable(events) +
                         CURL_CSELECT_ERR * (events.disconnect || events.timedout)
