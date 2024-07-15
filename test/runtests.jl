@@ -1,3 +1,8 @@
+@show Downloads.benchmark()
+
+exit()
+
+
 include("setup.jl")
 
 @testset "Downloads.jl" begin
