@@ -503,7 +503,9 @@ function test(n, tasks, times)
             Threads.@spawn begin
                 downloader = Downloads.Downloader(; grace=5)
                 for i in 1:n
-                    f = Downloads.download("http://localhost:800$(task-1)/julia-1.10.4-macaarch64.dmg"; downloader, verbose=false)
+                    url = "https://julialang-s3.julialang.org/bin/mac/x64/1.10/julia-1.10.4-mac64.dmg"
+                    # url = "http://localhost:800$(task-1)/julia-1.10.4-macaarch64.dmg"
+                    f = Downloads.download(url; downloader, verbose=false)
                     push!(fs, f)
                 end
             end
