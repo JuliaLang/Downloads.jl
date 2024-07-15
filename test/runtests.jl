@@ -1,4 +1,5 @@
 import Downloads
+@show Threads.nthreads()
 @show Downloads.benchmark()
 
 exit()
