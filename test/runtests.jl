@@ -1,3 +1,4 @@
+import Downloads
 @show Downloads.benchmark()
 
 exit()
