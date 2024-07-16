@@ -56,7 +56,7 @@ end
 const MULTIS_LOCK = Base.ReentrantLock()
 const MULTIS = WeakRef[]
 # Close any Multis and their timers at exit that haven't been finalized by then
-Base.atexit() do
+function atexit_close_multis()
     while true
         w = @lock MULTIS_LOCK (isempty(MULTIS) ? nothing : pop!(MULTIS))
         w === nothing && break
