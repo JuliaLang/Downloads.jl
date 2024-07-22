@@ -351,13 +351,13 @@ include("setup.jl")
         err = @exception download("https://domain.invalid")
         @test err isa RequestError
         @test err.code != 0
-        @test startswith(err.message, "Could not resolve host")
+        @test startswith(err.message, Sys.isfreebsd() ? "Resolving timed out" : "Could not resolve host")
         @test err.response.proto === nothing
 
         err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
-        @test startswith(err.message, "Could not resolve host")
+        @test startswith(err.message, Sys.isfreebsd() ? "Resolving timed out" : "Could not resolve host")
         @test err.response.proto === nothing
 
         err = @exception download("$server/status/404")
