@@ -387,7 +387,11 @@ function request(
                 easy_hook(downloader, easy, info)
 
                 # do the request
-                add_handle(downloader.multi, easy)
+                add_handle_error = add_handle(downloader.multi, easy)
+                if add_handle_error != 0
+                    no_response = Response(nothing, "", 0, "", [])
+                    throw(RequestError(url, add_handle_error, "", no_response))
+                end
                 try # ensure handle is removed
                     @sync begin
                         @async for buf in easy.output
