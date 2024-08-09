@@ -43,7 +43,7 @@ end
 
 function add_handle(multi::Multi, easy::Easy)
     connect_semaphore_acquire(easy)
-    lock(multi.lock) do
+    added = lock(multi.lock) do
         if isempty(multi.easies)
             preserve_handle(multi)
         end
@@ -51,6 +51,10 @@ function add_handle(multi::Multi, easy::Easy)
         init!(multi)
         @check curl_multi_add_handle(multi.handle, easy.handle)
     end
+    if added != 0
+        connect_semaphore_release(easy)
+    end
+    return added
 end
 
 const MULTIS_LOCK = Base.ReentrantLock()
@@ -170,7 +174,22 @@ function socket_callback(
         if action in (CURL_POLL_IN, CURL_POLL_OUT, CURL_POLL_INOUT)
             readable = action in (CURL_POLL_IN,  CURL_POLL_INOUT)
             writable = action in (CURL_POLL_OUT, CURL_POLL_INOUT)
-            watcher = FDWatcher(OS_HANDLE(sock), readable, writable)
+            watcher = try
+                FDWatcher(OS_HANDLE(sock), readable, writable)
+            catch watcher_ex
+                if watcher_ex isa Base.IOError
+                    task = @async begin
+                        lock(multi.lock) do
+                            @check curl_multi_socket_action(multi.handle, sock, CURL_CSELECT_ERR)
+                            check_multi_info(multi)
+                        end
+                    end
+                    @isdefined(errormonitor) && errormonitor(task)
+                    nothing
+                else
+                    rethrow()
+                end
+            end
             preserve_handle(watcher)
             watcher_p = pointer_from_objref(watcher)
             @check curl_multi_assign(multi.handle, sock, watcher_p)

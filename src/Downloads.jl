@@ -395,7 +395,11 @@ function request(
                 easy_hook(downloader, easy, info)
 
                 # do the request
-                add_handle(downloader.multi, easy)
+                add_handle_error = add_handle(downloader.multi, easy)
+                if add_handle_error != 0
+                    no_response = Response(nothing, "", 0, "", [])
+                    throw(RequestError(url, add_handle_error, "", no_response))
+                end
                 interrupted = Threads.Atomic{Bool}(false)
                 if interrupt !== nothing
                     interrupt_task = @async begin
