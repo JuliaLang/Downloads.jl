@@ -440,7 +440,13 @@ function request(
                 response = Response(get_response_info(easy)...)
                 easy.code == Curl.CURLE_OK && return response
                 message = get_curl_errstr(easy)
-                response = RequestError(url, easy.code, message, response)
+                if easy.code == typemax(Curl.CURLcode)
+                    # uninitialized code, likely a protocol error
+                    code = Int(0)
+                else
+                    code = Int(easy.code)
+                end
+                response = RequestError(url, code, message, response)
                 throw && Base.throw(response)
             end
         end
