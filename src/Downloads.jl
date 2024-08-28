@@ -468,6 +468,7 @@ end
 
 # Precompile
 let
+    Curl.__init__()
     d = Downloader()
     f = mktemp()[1]
     download("file://" * f; downloader=d)
