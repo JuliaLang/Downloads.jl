@@ -8,6 +8,7 @@ mutable struct Multi
     function Multi(grace::Integer = typemax(UInt64))
         multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
         finalizer(done!, multi)
+        @lock MULTIS_LOCK push!(filter!(m -> m.value isa Multi, MULTIS), WeakRef(multi))
         return multi
     end
 end
@@ -51,6 +52,9 @@ function add_handle(multi::Multi, easy::Easy)
         @check curl_multi_add_handle(multi.handle, easy.handle)
     end
 end
+
+const MULTIS_LOCK = Base.ReentrantLock()
+const MULTIS = WeakRef[]
 
 function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do

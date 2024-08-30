@@ -3,11 +3,11 @@ on:
   pull_request:
     branches:
       - master
-      - release-1.4
+      - release-*
   push:
     branches:
       - master
-      - release-1.4
+      - release-*
     tags: '*'
 jobs:
   test:
@@ -17,6 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - '1.10' #Change to lts when runners bump the lts name
           - '1' # automatically expands to the latest stable 1.x release of Julia.
           - 'nightly'
         os:
@@ -30,22 +31,15 @@ jobs:
         exclude:
           - os: macOS-latest
             arch: x86
+          - os: windows-latest
+            version: '1.3' # `curl_easy_setopt: 48` error on github CI
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: actions/cache@v1
-        env:
-          cache-name: cache-artifacts
-        with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-${{ matrix.os }}
-            ${{ runner.os }}-
+      - uses: julia-actions/cache@v1
       - run: julia --color=yes .ci/test_and_change_uuid.jl
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1

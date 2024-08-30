@@ -51,7 +51,8 @@ function grace_ms(grace::Real)
 end
 
 function easy_hook(downloader::Downloader, easy::Easy, info::NamedTuple)
-    downloader.easy_hook !== nothing && downloader.easy_hook(easy, info)
+    hook = downloader.easy_hook
+    hook !== nothing && Base.invokelatest(hook, easy, info)
 end
 
 get_ca_roots() = Curl.SYSTEM_SSL ? ca_roots() : ca_roots_path()
@@ -467,11 +468,10 @@ end
 
 # Precompile
 let
-    d = Downloader(; grace=0.01)
-    download("file://" * @__FILE__; downloader=d)
-    # Ref https://github.com/JuliaLang/julia/issues/49513
-    # we wait for the grace task to finish
-    sleep(0.05)
+    Curl.__init__()
+    d = Downloader()
+    f = mktemp()[1]
+    download("file://" * f; downloader=d)
     precompile(Tuple{typeof(Downloads.download), String, String})
     precompile(Tuple{typeof(Downloads.Curl.status_2xx_ok), Int64})
 end
