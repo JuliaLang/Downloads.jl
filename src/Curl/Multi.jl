@@ -192,6 +192,10 @@ function socket_callback(
                 end
             end
             @isdefined(errormonitor) && errormonitor(task)
+        else
+            lock(multi.lock) do
+                check_multi_info(multi)
+            end
         end
         @isdefined(old_watcher) && close(old_watcher)
         return 0
