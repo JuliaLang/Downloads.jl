@@ -478,6 +478,17 @@ include("setup.jl")
             timedwait(()->istaskdone(download_task), 5.0)
             @test istaskdone(download_task)
             @test download_task.result isa RequestError
+
+            interrupt = Base.Event()
+            url = "$server/put"
+            input=`sh -c 'sleep 15; echo "hello"'`
+            download_task = @async request(url; interrupt=interrupt, input=input)
+            sleep(0.1)
+            @test !istaskdone(download_task)
+            notify(interrupt)
+            timedwait(()->istaskdone(download_task), 5.0)
+            @test istaskdone(download_task)
+            @test download_task.result isa RequestError
         end
 
         @testset "progress" begin
