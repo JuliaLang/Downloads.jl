@@ -396,7 +396,7 @@ function request(
 
                 # do the request
                 add_handle(downloader.multi, easy)
-                interrupted = false
+                interrupted = Threads.Atomic{Bool}(false)
                 if interrupt !== nothing
                     interrupt_task = @async begin
                         # wait for the interrupt event
@@ -405,7 +405,9 @@ function request(
                         remove_handle(downloader.multi, easy)
                         close(easy.output)
                         close(easy.progress)
-                        interrupted = true
+                        interrupted[] = true
+                        close(input)
+                        notify(easy.ready)
                     end
                 else
                     interrupt_task = nothing
@@ -425,7 +427,7 @@ function request(
                         end
                     end
                 finally
-                    if !interrupted
+                    if !(interrupted[])
                         if interrupt_task !== nothing
                             # trigger interrupt
                             notify(interrupt)

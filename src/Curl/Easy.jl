@@ -375,7 +375,11 @@ function upload_data(easy::Easy, input::IO)
         curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
         wait(easy.ready)
         easy.input === nothing && break
-        easy.ready = Threads.Event()
+        if hasmethod(reset, (Base.Event,))
+            reset(easy.ready)
+        else
+            easy.ready = Threads.Event()
+        end
     end
 end
 
