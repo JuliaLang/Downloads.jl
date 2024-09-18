@@ -190,6 +190,9 @@ function socket_callback(
                     rethrow()
                 end
             end
+            if watcher === nothing
+                return -1
+            end
             preserve_handle(watcher)
             watcher_p = pointer_from_objref(watcher)
             @check curl_multi_assign(multi.handle, sock, watcher_p)

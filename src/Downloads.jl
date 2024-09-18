@@ -398,7 +398,12 @@ function request(
                 add_handle_error = add_handle(downloader.multi, easy)
                 if add_handle_error != 0
                     no_response = Response(nothing, "", 0, "", [])
-                    throw(RequestError(url, add_handle_error, "", no_response))
+                    request_error = RequestError(url, add_handle_error, "", no_response)
+                    if throw
+                        Base.throw(request_error)
+                    else
+                        return request_error
+                    end
                 end
                 interrupted = Threads.Atomic{Bool}(false)
                 if interrupt !== nothing
