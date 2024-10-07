@@ -55,15 +55,6 @@ end
 
 const MULTIS_LOCK = Base.ReentrantLock()
 const MULTIS = WeakRef[]
-# Close any Multis and their timers at exit that haven't been finalized by then
-Base.atexit() do
-    while true
-        w = @lock MULTIS_LOCK (isempty(MULTIS) ? nothing : pop!(MULTIS))
-        w === nothing && break
-        w = w.value
-        w isa Multi && done!(w)
-    end
-end
 
 function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
@@ -201,6 +192,10 @@ function socket_callback(
                 end
             end
             @isdefined(errormonitor) && errormonitor(task)
+        else
+            lock(multi.lock) do
+                check_multi_info(multi)
+            end
         end
         @isdefined(old_watcher) && close(old_watcher)
         return 0

@@ -65,10 +65,6 @@ using Base: OS_HANDLE, preserve_handle, unpreserve_handle
 
 include("utils.jl")
 
-function __init__()
-    @check curl_global_init(CURL_GLOBAL_ALL)
-end
-
 const CURL_VERSION_INFO = unsafe_load(curl_version_info(CURLVERSION_NOW))
 if CURL_VERSION_INFO.ssl_version == Base.C_NULL
     const SSL_VERSION = ""
@@ -90,6 +86,20 @@ end
 
 include("Easy.jl")
 include("Multi.jl")
+
+function __init__()
+    @check curl_global_init(CURL_GLOBAL_ALL)
+
+    # Close any Multis and their timers at exit that haven't been finalized by then
+    Base.atexit() do
+        while true
+            w = @lock MULTIS_LOCK (isempty(MULTIS) ? nothing : pop!(MULTIS))
+            w === nothing && break
+            w = w.value
+            w isa Multi && done!(w)
+        end
+    end
+end
 
 function with_handle(f, handle::Union{Multi, Easy})
     try f(handle)

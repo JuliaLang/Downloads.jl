@@ -97,6 +97,7 @@ request(url;
     [ debug = <none>, ]
     [ throw = true, ]
     [ downloader = <default>, ]
+    [ interrupt = <none>, ]
 ) -> Union{Response, RequestError}
 ```
 - `url        :: AbstractString`
@@ -110,6 +111,7 @@ request(url;
 - `debug      :: (type, message) --> Any`
 - `throw      :: Bool`
 - `downloader :: Downloader`
+- `interrupt  :: Base.Event`
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
@@ -128,6 +130,11 @@ Note that unlike `download` which throws an error if the requested URL could not
 be downloaded (indicated by non-2xx status code), `request` returns a `Response`
 object no matter what the status code of the response is. If there is an error
 with getting a response at all, then a `RequestError` is thrown or returned.
+
+If the `interrupt` keyword argument is provided, it must be a `Base.Event` object.
+If the event is triggered while the request is in progress, the request will be
+cancelled and an error will be thrown. This can be used to interrupt a long
+running request, for example if the user wants to cancel a download.
 
 ### default_downloader!
 
