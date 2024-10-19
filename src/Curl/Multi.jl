@@ -25,8 +25,10 @@ function done!(multi::Multi)
     stoptimer!(multi)
     handle = multi.handle
     handle == C_NULL && return
-    multi.handle = C_NULL
+
+    # NOTE: curl_multi_cleanup will call handle
     curl_multi_cleanup(handle)
+    multi.handle = C_NULL
     nothing
 end
 
