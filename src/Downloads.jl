@@ -25,7 +25,7 @@ export download, request, Downloader, Response, RequestError, default_downloader
 ## public API types ##
 
 """
-    Downloader(; [ grace::Real = 30 ])
+    Downloader(; grace::Real = 30)
 
 `Downloader` objects are used to perform individual `download` operations.
 Connections, name lookups and other resources are shared within a `Downloader`.
@@ -176,14 +176,14 @@ include("filenames.jl")
 const DEFAULT_FILENAME = "download.txt"
 
 """
-    download(url, [ output = tempname() ];
-        [ method = "GET", ]
-        [ headers = <none>, ]
-        [ timeout = <none>, ]
-        [ progress = <none>, ]
-        [ verbose = false, ]
-        [ debug = <none>, ]
-        [ downloader = <default>, ]
+    download(url, output = tempname();
+        method = "GET",
+        headers = <none>,
+        timeout = <none>,
+        progress = <none>,
+        verbose = false,
+        debug = <none>,
+        downloader = <default>,
     ) -> output
 
         url        :: AbstractString
@@ -303,17 +303,17 @@ end
 
 """
     request(url;
-        [ input = <none>, ]
-        [ output = <none>, ]
-        [ method = input ? "PUT" : output ? "GET" : "HEAD", ]
-        [ headers = <none>, ]
-        [ timeout = <none>, ]
-        [ progress = <none>, ]
-        [ verbose = false, ]
-        [ debug = <none>, ]
-        [ throw = true, ]
-        [ downloader = <default>, ]
-        [ interrupt = <none>, ]
+        input = <none>,
+        output = <none>,
+        method = input ? "PUT" : output ? "GET" : "HEAD",
+        headers = <none>,
+        timeout = <none>,
+        progress = <none>,
+        verbose = false,
+        debug = <none>,
+        throw = true,
+        downloader = <default>,
+        interrupt = <none>,
     ) -> Union{Response, RequestError}
 
         url        :: AbstractString
