@@ -332,19 +332,6 @@ end
         interrupt = <none>,
     ) -> Union{Response, RequestError}
 
-        url        :: AbstractString
-        input      :: Union{AbstractString, AbstractCmd, IO}
-        output     :: Union{AbstractString, AbstractCmd, IO}
-        method     :: AbstractString
-        headers    :: Union{AbstractVector, AbstractDict}
-        timeout    :: Real
-        progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any
-        verbose    :: Bool
-        debug      :: (type, message) --> Any
-        throw      :: Bool
-        downloader :: Downloader
-        interrupt  :: Base.Event
-
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
 response is written to `output` if specified and discarded otherwise. For HTTP/S
@@ -357,6 +344,21 @@ options differ from the `download` function:
 - `input` allows providing a request body; if provided default to `PUT` request
 - `progress` is a callback taking four integers for upload and download progress
 - `throw` controls whether to throw or return a `RequestError` on request error
+
+The given `url` must be an `AbstractString`.
+All keyword arguments to this method are optional:
+
+- `input      :: Union{AbstractString, AbstractCmd, IO}`
+- `output     :: Union{AbstractString, AbstractCmd, IO}`
+- `method     :: AbstractString`
+- `headers    :: Union{AbstractVector, AbstractDict}`
+- `timeout    :: Real`
+- `progress   :: (dl_total, dl_now, ul_total, ul_now) -> Any`
+- `verbose    :: Bool`
+- `debug      :: (type, message) -> Any`
+- `throw      :: Bool`
+- `downloader :: Downloader`
+- `interrupt  :: Base.Event`
 
 Note that unlike `download` which throws an error if the requested URL could not
 be downloaded (indicated by non-2xx status code), `request` returns a `Response`
