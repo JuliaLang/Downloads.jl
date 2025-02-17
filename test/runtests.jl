@@ -220,6 +220,121 @@ include("setup.jl")
         end
     end
 
+    @testset "download file names" begin
+        @testset "url_filename helper" begin
+            for url in urls_with_filename()
+                @test nothing === Downloads.url_filename(url)
+            end
+            for name in file_names,
+                url in urls_with_filename(name)
+                @test name === Downloads.url_filename(url)
+            end
+            # URLs that we shouldn't get a file name from
+            for url in [
+                "",
+                "abc",
+                "abc.txt",
+                "abc:def",
+                "file:/",
+                "file://",
+                "file:///",
+                "$server/anything/%",
+                "$server/anything/%.txt",
+                "$server/anything/%0.txt",
+            ]
+                @test nothing === Downloads.url_filename(url)
+            end
+        end
+        # set a more unique default file name
+        default = Downloads.DEFAULT_FILENAME
+        @testset "from URL" begin
+            for url in rand(urls_with_filename(), 10)
+                @test default == splitdir(download(url))[2]
+                url′ = "$server/redirect-to?url="*url_escape(url)
+                # would be reasonable for this to be `default` too but
+                # currently we use the name from the original URL
+                @test Downloads.url_filename(url′) ==
+                    splitdir(download(url′))[2]
+            end
+            for name in file_names,
+                url in rand(urls_with_filename(name), 3)
+                @test name == splitdir(download(url))[2]
+                url′ = "$server/redirect-to?url="*url_escape(url)
+                @test name == splitdir(download(url′))[2]
+            end
+        end
+        @testset "unsafe names in URLs" begin
+            bad_names = [
+                url_escape(".")
+                url_escape("..")
+                "%ff"
+                "%ff.txt"
+            ]
+            if Sys.iswindows()
+                push!(bad_names, "CON")
+                push!(bad_names, "LPT1.txt")
+            end
+            for name in bad_names
+                url = "$server/anything/$name"
+                @test default == splitdir(download(url))[2]
+            end
+        end
+        @testset "from content disposition" begin
+            for name in file_names
+                url = content_disposition_url(:utf8 => name)
+                @test name == splitdir(download(url))[2]
+                isascii(name) || continue
+                url = content_disposition_url(:ascii => name)
+                @test name == splitdir(download(url))[2]
+                url = content_disposition_url(:ascii_1q => name)
+                @test name == splitdir(download(url))[2]
+                url = content_disposition_url(:ascii_2q => name)
+                @test name == splitdir(download(url))[2]
+            end
+            let name = "ÿ.txt"
+                url = content_disposition_url(:latin1 => name)
+                @test name == splitdir(download(url))[2]
+            end
+            let name = "y.txt", name⁺ = "ÿ.txt"
+                url = content_disposition_url(:ascii => name, :utf8 => name⁺)
+                @test name⁺ == splitdir(download(url))[2]
+                url = content_disposition_url(:ascii => name, :latin1 => name⁺)
+                @test name⁺ == splitdir(download(url))[2]
+                url = content_disposition_url(:utf8 => name⁺, :ascii => name)
+                @test name⁺ == splitdir(download(url))[2]
+                url = content_disposition_url(:latin1 => name⁺, :ascii => name)
+                @test name⁺ == splitdir(download(url))[2]
+                url = content_disposition_url(:latin1 => name, :utf8 => name⁺)
+                @test name⁺ == splitdir(download(url))[2]
+                url = content_disposition_url(:utf8 => name, :latin1 => name⁺)
+                @test name⁺ == splitdir(download(url))[2]
+            end
+        end
+        @testset "invalid content disposition" begin
+            for value in [
+                "\a\b"
+                "inline"
+                "attachment"
+                "attachment; filename"
+                "attachment; filename='"
+                "attachment; filename=\""
+                "attachment; filename='unclosed"
+                "attachment; filename=\"unclosed"
+                "attachment; filename*=name.txt"
+                "attachment; filename*='name.txt'"
+                "attachment; filename*=\"name.txt\""
+                "attachment; filename*=utf-8''%"
+                "attachment; filename*=utf-8''%.txt"
+                "attachment; filename*=utf-8''%00.txt" # valid but unsafe
+            ]
+                name = "response-headers"
+                url = "$server/response-headers?content-disposition="*
+                    url_escape(value)
+                @test name === splitdir(download(url))[2]
+            end
+        end
+    end
+
     @testset "debug callback" begin
         url = "$server/get"
         events = Pair{String,String}[]

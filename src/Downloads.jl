@@ -170,6 +170,11 @@ end
 
 ## download API ##
 
+# Getting file names from URLs and Responses:
+include("filenames.jl")
+
+const DEFAULT_FILENAME = "download.txt"
+
 """
     download(url, [ output = tempname() ];
         [ method = "GET", ]
@@ -255,7 +260,20 @@ function download(
     debug      :: Union{Function, Nothing} = nothing,
     downloader :: Union{Downloader, Nothing} = nothing,
 ) :: ArgWrite
-    arg_write(output) do output
+    # only rename when output is originally empty
+    try_rename = false
+    if output === nothing
+        try_rename = true
+        # guess file name from URL (might not be final name)
+        name = url_filename(url)
+        if !is_safe_filename(name)
+            name = DEFAULT_FILENAME
+        end
+        @show name
+        output = joinpath(mktempdir(), name)
+    end
+    local response # capture outside closure
+    path = arg_write(output) do output
         response = request(
             url,
             output = output,
@@ -270,6 +288,20 @@ function download(
         status_ok(response) && return output
         throw(RequestError(url, Curl.CURLE_OK, "", response))
     end
+    # fix file suffix based on headers & redirected URL
+    if try_rename && ispath(path)
+        name = get_filename(response)
+        @show name, is_safe_filename(name)
+        if is_safe_filename(name)
+            path′ = joinpath(dirname(path), name)
+            @assert dirname(path) == dirname(path′)
+            if path != path′
+                mv(path, path′)
+                path = path′
+            end
+        end
+    end
+    return path
 end
 
 ## request API ##

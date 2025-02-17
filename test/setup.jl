@@ -57,7 +57,7 @@ macro exception(ex)
     end
 end
 
-# URL escape & unescape
+# URL escape
 
 function is_url_safe_byte(byte::UInt8)
     0x2d ≤ byte ≤ 0x2e ||
@@ -83,3 +83,56 @@ url_escape(str::AbstractString) = url_escape(String(str))
 
 const default_server = "https://httpbingo.julialang.org"
 const server = get(ENV, "JULIA_TEST_HTTPBINGO_SERVER", default_server)
+
+const file_names = [
+    "file",
+    "file.txt",
+    "with space",
+    "single'quote",
+    "double\"quote",
+    "∀x∃y",
+    "∀ x ∃ y",
+    "∀ ' ∃ \" ",
+]
+
+urls_with_filename(name::AbstractString = "") = [
+    string(
+        chopsuffix(string(server, path), "/"), '/',
+        url_escape(name), query, fragment,
+    )
+    for path in (isempty(name) ?
+        ("", "/", "//", "///", "/anything/", "/anything//") :
+        ("/anything/", "/anything//", "/anything/foo/"))
+    for query in ("", "?", "?key=value")
+    for fragment in ("", "#", "#fragment")
+]
+
+function content_disposition_url(pairs::Pair{Symbol,String}...)
+    v = "attachment"
+    for (enc, name) in pairs
+        if enc == :ascii
+            @assert isascii(name)
+            @assert name[1] ∉ ('\'', '"')
+            @assert ';' ∉ name
+            v *= "; filename=$name"
+        end
+        if enc == :ascii_1q
+            @assert isascii(name)
+            name′ = replace(replace(name, '\\' => "\\\\"), '\'' => "\\'")
+            v *= "; filename='$name′'"
+        end
+        if enc == :ascii_2q
+            @assert isascii(name)
+            name′ = replace(replace(name, '\\' => "\\\\"), '"' => "\\\"")
+            v *= "; filename=\"$name′\""
+        end
+        if enc == :utf8
+            v *= "; filename*=utf-8''" * url_escape(name)
+        end
+        if enc == :latin1
+            name′ = String(map(UInt8, collect(name)))
+            v *= "; filename*=iso-8859-1''" * url_escape(name′)
+        end
+    end
+    "$server/response-headers?content-disposition=" * url_escape(v)
+end
