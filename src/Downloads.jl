@@ -25,7 +25,7 @@ export download, request, Downloader, Response, RequestError, default_downloader
 ## public API types ##
 
 """
-    Downloader(; [ grace::Real = 30 ])
+    Downloader(; grace::Real = 30)
 
 `Downloader` objects are used to perform individual `download` operations.
 Connections, name lookups and other resources are shared within a `Downloader`.
@@ -176,64 +176,80 @@ include("filenames.jl")
 const DEFAULT_FILENAME = "download.txt"
 
 """
-    download(url, [ output = tempname() ];
-        [ method = "GET", ]
-        [ headers = <none>, ]
-        [ timeout = <none>, ]
-        [ progress = <none>, ]
-        [ verbose = false, ]
-        [ debug = <none>, ]
-        [ downloader = <default>, ]
+    download(url, output = tempname();
+        method = "GET",
+        headers = <none>,
+        timeout = <none>,
+        progress = <none>,
+        verbose = false,
+        debug = <none>,
+        downloader = <default>,
     ) -> output
-
-        url        :: AbstractString
-        output     :: Union{AbstractString, AbstractCmd, IO}
-        method     :: AbstractString
-        headers    :: Union{AbstractVector, AbstractDict}
-        timeout    :: Real
-        progress   :: (total::Integer, now::Integer) --> Any
-        verbose    :: Bool
-        debug      :: (type, message) --> Any
-        downloader :: Downloader
 
 Download a file from the given url, saving it to `output` or if not specified, a
 temporary path. The `output` can also be an `IO` handle, in which case the body
 of the response is streamed to that handle and the handle is returned. If
 `output` is a command, the command is run and output is sent to it on stdin.
 
-If the `downloader` keyword argument is provided, it must be a `Downloader`
-object. Resources and connections will be shared between downloads performed by
-the same `Downloader` and cleaned up automatically when the object is garbage
-collected or there have been no downloads performed with it for a grace period.
-See `Downloader` for more info about configuration and usage.
+## Arguments
 
-If the `headers` keyword argument is provided, it must be a vector or dictionary
-whose elements are all pairs of strings. These pairs are passed as headers when
-downloading URLs with protocols that supports them, such as HTTP/S.
+### Positonal arguments
 
-The `timeout` keyword argument specifies a timeout for the download to complete in
-seconds, with a resolution of milliseconds. By default no timeout is set, but this
-can also be explicitly requested by passing a timeout value of `Inf`. Separately,
-if 20 seconds elapse without receiving any data, the download will timeout. See
-extended help for how to disable this timeout.
+- `url :: AbstractString`
 
-If the `progress` keyword argument is provided, it must be a callback function
-which will be called whenever there are updates about the size and status of the
-ongoing download. The callback must take two integer arguments: `total` and
-`now` which are the total size of the download in bytes, and the number of bytes
-which have been downloaded so far. Note that `total` starts out as zero and
-remains zero until the server gives an indication of the total size of the
-download (e.g. with a `Content-Length` header), which may never happen. So a
-well-behaved progress callback should handle a total size of zero gracefully.
+- `output :: Union{AbstractString, AbstractCmd, IO}`
 
-If the `verbose` option is set to true, `libcurl`, which is used to implement
-the download functionality will print debugging information to `stderr`. If the
-`debug` option is set to a function accepting two `String` arguments, then the
-verbose option is ignored and instead the data that would have been printed to
-`stderr` is passed to the `debug` callback with `type` and `message` arguments.
-The `type` argument indicates what kind of event has occurred, and is one of:
-`TEXT`, `HEADER IN`, `HEADER OUT`, `DATA IN`, `DATA OUT`, `SSL DATA IN` or `SSL
-DATA OUT`. The `message` argument is the description of the debug event.
+### Keyword Arguments
+
+All keyword arguments are optional.
+
+- `method :: AbstractString`
+
+- `downloader :: Downloader`
+
+  If the `downloader` keyword argument is provided, it must be a `Downloader`
+  object. Resources and connections will be shared between downloads performed by
+  the same `Downloader` and cleaned up automatically when the object is garbage
+  collected or there have been no downloads performed with it for a grace period.
+  See `Downloader` for more info about configuration and usage.
+
+- `headers :: Union{AbstractVector, AbstractDict}`
+
+  If the `headers` keyword argument is provided, it must be a vector or dictionary
+  whose elements are all pairs of strings. These pairs are passed as headers when
+  downloading URLs with protocols that supports them, such as HTTP/S.
+
+- `timeout :: Real`
+
+  The `timeout` keyword argument specifies a timeout for the download to complete in
+  seconds, with a resolution of milliseconds. By default no timeout is set, but this
+  can also be explicitly requested by passing a timeout value of `Inf`. Separately,
+  if 20 seconds elapse without receiving any data, the download will timeout. See
+  extended help for how to disable this timeout.
+
+- `progress :: (total::Integer, now::Integer) -> Any`
+
+  If the `progress` keyword argument is provided, it must be a callback function
+  which will be called whenever there are updates about the size and status of the
+  ongoing download. The callback must take two integer arguments: `total` and
+  `now` which are the total size of the download in bytes, and the number of bytes
+  which have been downloaded so far. Note that `total` starts out as zero and
+  remains zero until the server gives an indication of the total size of the
+  download (e.g. with a `Content-Length` header), which may never happen. So a
+  well-behaved progress callback should handle a total size of zero gracefully.
+
+- `verbose :: Bool`
+
+  If the `verbose` option is set to true, `libcurl`, which is used to implement
+  the download functionality will print debugging information to `stderr`. If the
+  `debug` option is set to a function accepting two `String` arguments, then the
+  verbose option is ignored and instead the data that would have been printed to
+  `stderr` is passed to the `debug` callback with `type` and `message` arguments.
+  The `type` argument indicates what kind of event has occurred, and is one of:
+  `TEXT`, `HEADER IN`, `HEADER OUT`, `DATA IN`, `DATA OUT`, `SSL DATA IN` or `SSL
+  DATA OUT`. The `message` argument is the description of the debug event.
+
+- `debug :: (type, message) -> Any`
 
 ## Extended Help
 
@@ -242,7 +258,7 @@ For further customization, use a [`Downloader`](@ref) and
 For example, to disable the 20 second timeout when no data is received, you may
 use the following:
 
-```jl
+```julia
 downloader = Downloads.Downloader()
 downloader.easy_hook = (easy, info) -> Downloads.Curl.setopt(easy, Downloads.Curl.CURLOPT_LOW_SPEED_TIME, 0)
 
@@ -306,31 +322,18 @@ end
 
 """
     request(url;
-        [ input = <none>, ]
-        [ output = <none>, ]
-        [ method = input ? "PUT" : output ? "GET" : "HEAD", ]
-        [ headers = <none>, ]
-        [ timeout = <none>, ]
-        [ progress = <none>, ]
-        [ verbose = false, ]
-        [ debug = <none>, ]
-        [ throw = true, ]
-        [ downloader = <default>, ]
-        [ interrupt = <none>, ]
+        input = <none>,
+        output = <none>,
+        method = input ? "PUT" : output ? "GET" : "HEAD",
+        headers = <none>,
+        timeout = <none>,
+        progress = <none>,
+        verbose = false,
+        debug = <none>,
+        throw = true,
+        downloader = <default>,
+        interrupt = <none>,
     ) -> Union{Response, RequestError}
-
-        url        :: AbstractString
-        input      :: Union{AbstractString, AbstractCmd, IO}
-        output     :: Union{AbstractString, AbstractCmd, IO}
-        method     :: AbstractString
-        headers    :: Union{AbstractVector, AbstractDict}
-        timeout    :: Real
-        progress   :: (dl_total, dl_now, ul_total, ul_now) --> Any
-        verbose    :: Bool
-        debug      :: (type, message) --> Any
-        throw      :: Bool
-        downloader :: Downloader
-        interrupt  :: Base.Event
 
 Make a request to the given url, returning a `Response` object capturing the
 status, headers and other information about the response. The body of the
@@ -344,6 +347,21 @@ options differ from the `download` function:
 - `input` allows providing a request body; if provided default to `PUT` request
 - `progress` is a callback taking four integers for upload and download progress
 - `throw` controls whether to throw or return a `RequestError` on request error
+
+The given `url` must be an `AbstractString`.
+All keyword arguments to this method are optional:
+
+- `input      :: Union{AbstractString, AbstractCmd, IO}`
+- `output     :: Union{AbstractString, AbstractCmd, IO}`
+- `method     :: AbstractString`
+- `headers    :: Union{AbstractVector, AbstractDict}`
+- `timeout    :: Real`
+- `progress   :: (dl_total, dl_now, ul_total, ul_now) -> Any`
+- `verbose    :: Bool`
+- `debug      :: (type, message) -> Any`
+- `throw      :: Bool`
+- `downloader :: Downloader`
+- `interrupt  :: Base.Event`
 
 Note that unlike `download` which throws an error if the requested URL could not
 be downloaded (indicated by non-2xx status code), `request` returns a `Response`
@@ -518,11 +536,7 @@ function content_length(headers::Union{AbstractVector, AbstractDict})
 end
 
 """
-    default_downloader!(
-        downloader = <none>
-    )
-
-        downloader :: Downloader
+    default_downloader!(downloader::Downloader = <none>)
 
 Set the default `Downloader`. If no argument is provided, resets the default downloader so that a fresh one is created the next time the default downloader is needed.
 """
