@@ -287,6 +287,7 @@ include("setup.jl")
         end
         @testset "from content disposition" begin
             for name in file_names
+                Sys.iswindows() && '"' in name && continue
                 url = content_disposition_url(:utf8 => name)
                 @test name == splitdir(download(url))[2]
                 isascii(name) || continue
@@ -355,10 +356,9 @@ include("setup.jl")
                 push!(values, "attachment; filename=\"$name\"")
             end
             for value in values
-                name = "response-headers"
                 url = "$server/response-headers?content-disposition="*
                     url_escape(value)
-                @test name === splitdir(download(url))[2]
+                @test "response-headers" === splitdir(download(url))[2]
             end
         end
     end
