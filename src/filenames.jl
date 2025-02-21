@@ -131,10 +131,11 @@ const WIN_SPECIAL_NAMES = r"^(
 function is_safe_filename(name::AbstractString)
     isvalid(name) || return false
     '/' in name && return false
-    '\0' in name && return false
     name in ("", ".", "..") && return false
+    any(iscntrl, name) && return false
     if Sys.iswindows()
-        any(iscntrl(c) || c ∈ "\"*:<>?\\|" for c in name) && return false
+        name[end] ∈ ". " && return false
+        any(in("\"*:<>?\\|"), name) && return false
         contains(name, WIN_SPECIAL_NAMES) && return false
     end
     return true

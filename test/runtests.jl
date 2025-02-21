@@ -267,10 +267,14 @@ include("setup.jl")
             bad_names = [
                 url_escape(".")
                 url_escape("..")
+                url_escape("\a")
                 "%ff"
                 "%ff.txt"
             ]
             if Sys.iswindows()
+                push!(bad_names, "file.")
+                push!(bad_names, "file ")
+                push!(bad_names, "file:txt")
                 push!(bad_names, "CON")
                 push!(bad_names, "LPT1.txt")
             end
@@ -311,7 +315,8 @@ include("setup.jl")
             end
         end
         @testset "invalid content disposition" begin
-            for value in [
+            # invalid content disposition header syntax
+            values = [
                 "\a\b"
                 "inline"
                 "attachment"
@@ -325,8 +330,29 @@ include("setup.jl")
                 "attachment; filename*=\"name.txt\""
                 "attachment; filename*=utf-8''%"
                 "attachment; filename*=utf-8''%.txt"
-                "attachment; filename*=utf-8''%00.txt" # valid but unsafe
             ]
+            bad_names = [
+                ""
+                "."
+                ".."
+                "foo/bar"
+                "foo\0"
+                "\a"
+                "ding!\v"
+            ]
+            if Sys.iswindows()
+                push!(bad_names, "file.")
+                push!(bad_names, "file ")
+                push!(bad_names, "file:txt")
+                push!(bad_names, "CON")
+                push!(bad_names, "LPT1.txt")
+            end
+            for name in bad_names
+                push!(values, "attachment; filename*=utf-8''$(url_escape(name))")
+                '\0' in name && continue
+                push!(values, "attachment; filename=\"$name\"")
+            end
+            for value in values
                 name = "response-headers"
                 url = "$server/response-headers?content-disposition="*
                     url_escape(value)

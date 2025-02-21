@@ -263,6 +263,7 @@ function download(
     # only rename when output is originally empty
     try_rename = false
     if output === nothing
+        @show url
         try_rename = true
         # guess file name from URL (might not be final name)
         name = url_filename(url)
