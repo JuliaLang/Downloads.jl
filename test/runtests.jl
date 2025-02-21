@@ -256,11 +256,13 @@ include("setup.jl")
                 @test Downloads.url_filename(url′) ==
                     splitdir(download(url′))[2]
             end
-            for name in file_names,
-                url in rand(urls_with_filename(name), 3)
-                @test name == splitdir(download(url))[2]
-                url′ = "$server/redirect-to?url="*url_escape(url)
-                @test name == splitdir(download(url′))[2]
+            for name in file_names
+                Sys.iswindows() && '"' in name && continue
+                for url in rand(urls_with_filename(name), 3)
+                    @test name == splitdir(download(url))[2]
+                    url′ = "$server/redirect-to?url="*url_escape(url)
+                    @test name == splitdir(download(url′))[2]
+                end
             end
         end
         @testset "unsafe names in URLs" begin
@@ -272,11 +274,11 @@ include("setup.jl")
                 "%ff.txt"
             ]
             if Sys.iswindows()
-                push!(bad_names, "file.")
-                push!(bad_names, "file ")
-                push!(bad_names, "file:txt")
-                push!(bad_names, "CON")
-                push!(bad_names, "LPT1.txt")
+                push!(bad_names, url_escape("file."))
+                push!(bad_names, url_escape("file "))
+                push!(bad_names, url_escape("file:txt"))
+                push!(bad_names, url_escape("CON"))
+                push!(bad_names, url_escape("LPT1.txt"))
             end
             for name in bad_names
                 url = "$server/anything/$name"
