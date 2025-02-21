@@ -4,9 +4,7 @@ include("setup.jl")
     @testset "libcurl configuration" begin
         julia = "$(VERSION.major).$(VERSION.minor)"
         @test Curl.USER_AGENT == "curl/$(Curl.CURL_VERSION) julia/$julia"
-        if VERSION > v"1.6-"
-            @test Curl.SYSTEM_SSL == Sys.iswindows() | Sys.isapple()
-        end
+        @test Curl.SYSTEM_SSL == Sys.iswindows() | Sys.isapple()
     end
 
     @testset "API coverage" begin
@@ -20,7 +18,7 @@ include("setup.jl")
         @test value == read(path, String)
         rm(path)
         # with headers
-        path = download(url, headers=headers)
+        path = download(url; headers)
         @test isfile(path)
         @test value == read(path, String)
         rm(path)
@@ -34,7 +32,7 @@ include("setup.jl")
             rm(path)
             # with headers
             @arg_test output begin
-                @test output == download(url, output, headers=headers)
+                @test output == download(url, output; headers)
             end
             @test isfile(path)
             @test value == read(path, String)
@@ -65,7 +63,7 @@ include("setup.jl")
     @testset "head request" begin
         url = server * "/image/jpeg"
         output = IOBuffer()
-        resp = request(url; method="HEAD", output=output)
+        resp = request(url; method="HEAD", output)
         @test resp isa Response
         @test resp.proto == "https"
         @test resp.status == 200
@@ -74,7 +72,7 @@ include("setup.jl")
 
         # when we make a `GET` instead of a `HEAD`, we get a body with the content-length
         # returned from the `HEAD` request.
-        resp = request(url; method="GET", output=output)
+        resp = request(url; method="GET", output)
         bytes = take!(output)
         @test length(bytes) == len
     end
@@ -114,7 +112,7 @@ include("setup.jl")
             open(file) do io
                 events = Pair{String,String}[]
                 debug(type, msg) = push!(events, type => msg)
-                resp, json = request_json(url, input=io, debug=debug, headers=headers)
+                resp, json = request_json(url; input=io, debug, headers)
                 @test json["url"] == url
                 @test json["data"] == read(file, String)
                 header_out(hdr::String) = any(events) do (type, msg)
@@ -172,7 +170,7 @@ include("setup.jl")
 
         @testset "set headers" begin
             headers = ["Foo" => "123", "Header" => "VaLuE", "Empty" => ""]
-            json = download_json(url, headers = headers)
+            json = download_json(url; headers)
             for (key, value) in headers
                 @test header(json["headers"], key) == value
             end
@@ -185,7 +183,7 @@ include("setup.jl")
                 "Accept"     => "application/tar"
                 "User-Agent" => "MyUserAgent/1.0"
             ]
-            json = download_json(url, headers = headers)
+            json = download_json(url; headers)
             @test header(json["headers"], "Accept") == "application/tar"
             @test header(json["headers"], "User-Agent") == "MyUserAgent/1.0"
         end
@@ -195,7 +193,7 @@ include("setup.jl")
                 "Accept"     => ""
                 "User-Agent" => ""
             ]
-            json = download_json(url, headers = headers)
+            json = download_json(url; headers)
             @test header(json["headers"], "Accept") == ""
             @test header(json["headers"], "User-Agent") == ""
         end
@@ -205,7 +203,7 @@ include("setup.jl")
                 "Accept"     => nothing
                 "User-Agent" => nothing
             ]
-            json = download_json(url, headers = headers)
+            json = download_json(url; headers)
             @test !("Accept" in keys(json["headers"]))
             @test !("User-Agent" in keys(json["headers"]))
         end
@@ -243,13 +241,13 @@ include("setup.jl")
 
         # This url will redirect to /cookies, which echoes the set cookies as json
         set_cookie_url = "$server/cookies/set?k1=v1&k2=v2"
-        cookies = download_json(set_cookie_url, downloader=downloader)
+        cookies = download_json(set_cookie_url; downloader)
         @test get(cookies, "k1", "") == "v1"
         @test get(cookies, "k2", "") == "v2"
 
         # As the handle is destroyed, subsequent requests have no cookies
         cookie_url = "$server/cookies"
-        cookies = download_json(cookie_url, downloader=downloader)
+        cookies = download_json(cookie_url; downloader)
         @test isempty(cookies)
     end
 
@@ -299,7 +297,7 @@ include("setup.jl")
         downloader.easy_hook = (easy, info) ->
             Curl.setopt(easy, Curl.CURLOPT_NETRC_FILE, netrc)
 
-        resp = request(auth_url, throw=false, downloader=downloader)
+        resp = request(auth_url; downloader, throw=false)
         @test resp isa Response
         @test resp.status == 200  # succesful authentication
 
@@ -315,7 +313,7 @@ include("setup.jl")
             temp = download("file://$path")
             @test data == read(temp)
             output = IOBuffer()
-            resp = request("file://$path", output = output)
+            resp = request("file://$path"; output)
             @test resp isa Response
             @test resp.proto == "file"
             @test resp.status == 0
@@ -327,7 +325,7 @@ include("setup.jl")
             @test_throws RequestError download("file://$path")
             @test_throws RequestError request("file://$path")
             output = IOBuffer()
-            resp = request("file://$path", output = output, throw = false)
+            resp = request("file://$path"; output, throw = false)
             @test resp isa RequestError
         end
     end
@@ -404,7 +402,7 @@ include("setup.jl")
                 url = "$server/delay/$delay"
                 t = @elapsed @sync for id = 1:count
                     @async begin
-                        json = download_json("$url?id=$id", downloader = downloader)
+                        json = download_json("$url?id=$id"; downloader)
                         @test get(json["args"], "id", nothing) == ["$id"]
                     end
                 end
@@ -479,7 +477,7 @@ include("setup.jl")
         @testset "interrupt" begin
             url = "$server/delay/10"
             interrupt = Base.Event()
-            download_task = @async request(url; interrupt=interrupt)
+            download_task = @async request(url; interrupt)
             sleep(0.1)
             @test !istaskdone(download_task)
             notify(interrupt)
@@ -490,7 +488,7 @@ include("setup.jl")
             interrupt = Base.Event()
             url = "$server/put"
             input=`sh -c 'sleep 15; echo "hello"'`
-            download_task = @async request(url; interrupt=interrupt, input=input)
+            download_task = @async request(url; interrupt, input)
             sleep(0.1)
             @test !istaskdone(download_task)
             notify(interrupt)
@@ -505,7 +503,7 @@ include("setup.jl")
             dl_funcs = [
                 download,
                 (url; progress) ->
-                    request(url, output=devnull, progress=progress)
+                    request(url; progress, output=devnull)
             ]
             p_funcs = [
                 (prog...) -> push!(progress, prog),
@@ -553,7 +551,7 @@ include("setup.jl")
             downloader = Downloader()
             downloader.easy_hook = easy_hook
             for outer url in urls
-                resp = request(url, throw=false, downloader=downloader)
+                resp = request(url; downloader, throw=false)
                 @test resp isa Response
                 @test resp.status == 200
             end
