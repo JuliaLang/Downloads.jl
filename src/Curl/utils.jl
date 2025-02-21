@@ -1,8 +1,3 @@
-if !@isdefined(contains)
-    contains(haystack, needle) = occursin(needle, haystack)
-    export contains
-end
-
 # basic C stuff
 
 puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)

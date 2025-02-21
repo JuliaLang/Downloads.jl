@@ -21,7 +21,7 @@ end
 function request_body(url::AbstractString; kwargs...)
     resp = nothing
     body = sprint() do output
-        resp = request(url; output=output, kwargs...)
+        resp = request(url; output, kwargs...)
     end
     return resp, body
 end
