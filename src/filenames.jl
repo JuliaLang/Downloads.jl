@@ -35,8 +35,11 @@ end
 
 function url_filename(url::AbstractString)
     m = match(r"^[a-z][a-z+._-]*://[^#?]*/([^/#?]+)(?:[#?]|$)"i, url)
-    m === nothing && return
-    url_unescape(m[1])
+    if m !== nothing
+        name = url_unescape(m[1])
+        is_safe_filename(name) && return name
+    end
+    return nothing
 end
 
 let # build some complex regular expressions
@@ -109,11 +112,10 @@ function get_filename(response::Response)
             end
         end
     end
-    filename⁺ !== nothing && return filename⁺
-    filename !== nothing && return filename
-    # no usable content disposition header
-    # extract from URL after redirects
-    return url_filename(response.url)
+    filename⁺ !== nothing && is_safe_filename(filename⁺) && return filename⁺
+    filename !== nothing && is_safe_filename(filename) && return filename
+    # no usable content disposition header, extract from URL after redirects
+    return url_filename(response.url) # calls is_safe_filename
 end
 
 # Special names on Windows: CON PRN AUX NUL COM1-9 LPT1-9

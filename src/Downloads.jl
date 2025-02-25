@@ -265,10 +265,7 @@ function download(
     if output === nothing
         try_rename = true
         # guess file name from URL (might not be final name)
-        name = url_filename(url)
-        if !is_safe_filename(name)
-            name = DEFAULT_FILENAME
-        end
+        name = something(url_filename(url), DEFAULT_FILENAME)
         output = joinpath(mktempdir(), name)
     end
     local response # capture outside closure
@@ -290,7 +287,7 @@ function download(
     # fix file suffix based on headers & redirected URL
     if try_rename && ispath(path)
         name = get_filename(response)
-        if is_safe_filename(name)
+        if name !== nothing
             path′ = joinpath(dirname(path), name)
             @assert dirname(path) == dirname(path′)
             if path != path′
