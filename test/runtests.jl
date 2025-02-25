@@ -227,7 +227,11 @@ include("setup.jl")
             end
             for name in file_names,
                 url in urls_with_filename(name)
-                @test name === Downloads.url_filename(url)
+                if Sys.iswindows() && '"' in name
+                    @test nothing === Downloads.url_filename(url)
+                else
+                    @test name === Downloads.url_filename(url)
+                end
             end
             # URLs that we shouldn't get a file name from
             for url in [
@@ -315,6 +319,10 @@ include("setup.jl")
                 @test name⁺ == splitdir(download(url))[2]
                 url = content_disposition_url(:utf8 => name, :latin1 => name⁺)
                 @test name⁺ == splitdir(download(url))[2]
+            end
+            let name = "valid.txt", name⁺ = "invalid\0.txt"
+                url = content_disposition_url(:ascii => name, :utf8 => name⁺)
+                @test name == splitdir(download(url))[2]
             end
         end
         @testset "invalid content disposition" begin
