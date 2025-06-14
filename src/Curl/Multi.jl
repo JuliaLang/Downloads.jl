@@ -159,6 +159,29 @@ function timer_callback(
     end
 end
 
+# Sometimes socket_callback doesn't finish before calling curl_multi_socket_action inside a task created by the callback
+# This likely has to do with how Julia takes ownership of C callback threads rather than yielding inside socket_callback
+# In order to let the callback finish so we can use the multi handle again, we need to yield to the event loop
+# Yielding just once should be sufficient, but include backoff behavior to account for external factors such as load
+function curl_multi_socket_action_retry(
+    multi_handle:: Ptr{Cvoid},
+    sock,
+    flags;
+    max_attempts=10,
+    f_backoff=(n) -> min(0.1, (1.0e-8 * (4.0^(n - 1) - 1.0))),
+)
+    r = 0
+    for n in 1:max_attempts
+        r = curl_multi_socket_action(multi_handle, sock, flags)
+        r == CURLM_RECURSIVE_API_CALL || break
+
+        # yield back to event loop until the curl callback for this multi returns
+        sleep(f_backoff(n))
+    end
+    r
+end
+
+
 function socket_callback(
     easy_h    :: Ptr{Cvoid},
     sock      :: curl_socket_t,
@@ -197,7 +220,7 @@ function socket_callback(
                         CURL_CSELECT_ERR * (events.disconnect || events.timedout)
                 lock(multi.lock) do
                     watcher.readable || watcher.writable || return # !isopen
-                    @check curl_multi_socket_action(multi.handle, sock, flags)
+                    @check curl_multi_socket_action_retry(multi.handle, sock, flags)
                     check_multi_info(multi)
                 end
             end
