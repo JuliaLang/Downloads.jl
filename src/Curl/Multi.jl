@@ -159,6 +159,20 @@ function timer_callback(
     end
 end
 
+function curl_multi_socket_action_retry(
+    multi_handle:: Ptr{Cvoid},
+    sock,
+    flags
+)
+    r = 0
+    for n in 1:5
+        r = curl_multi_socket_action(multi_handle, sock, flags)
+        r == CURLM_RECURSIVE_API_CALL || break
+        # yield back to event loop so the socket_callback can return
+        sleep(0.0)
+    end
+    r
+end
 
 function socket_callback(
     easy_h    :: Ptr{Cvoid},
@@ -198,7 +212,7 @@ function socket_callback(
                         CURL_CSELECT_ERR * (events.disconnect || events.timedout)
                 lock(multi.lock) do
                     watcher.readable || watcher.writable || return # !isopen
-                    @check curl_multi_socket_action(multi.handle, sock, flags)
+                    @check curl_multi_socket_action_retry(multi.handle, sock, flags)
                     check_multi_info(multi)
                 end
             end
