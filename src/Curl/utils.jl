@@ -65,7 +65,7 @@ macro reentrant_guard(ex::Expr)
             r = $(esc(ex))
             r == CURLM_RECURSIVE_API_CALL || break
             # yield back to event loop so the socket_callback can return
-            yield()
+            sleep(0.0)
         end
         iszero(r) || @async @error $prefix * string(r) maxlog=1_000
         r
