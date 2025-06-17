@@ -59,7 +59,7 @@ function add_handle(multi::Multi, easy::Easy)
         end
         push!(multi.easies, easy)
         init!(multi)
-        @check curl_multi_add_handle(multi.handle, easy.handle)
+        @reentrant_guard curl_multi_add_handle(multi.handle, easy.handle)
     end
 end
 
@@ -68,7 +68,7 @@ const MULTIS = WeakRef[]
 
 function remove_handle(multi::Multi, easy::Easy)
     lock(multi.lock) do
-        @check curl_multi_remove_handle(multi.handle, easy.handle)
+        @reentrant_guard curl_multi_remove_handle(multi.handle, easy.handle)
         deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
         isempty(multi.easies) || return
         stoptimer!(multi)
@@ -127,7 +127,7 @@ end
 # curl callbacks
 
 function do_multi(multi::Multi)
-    @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+    @reentrant_guard curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
     check_multi_info(multi)
 end
 
@@ -212,7 +212,7 @@ function socket_callback(
                         CURL_CSELECT_ERR * (events.disconnect || events.timedout)
                 lock(multi.lock) do
                     watcher.readable || watcher.writable || return # !isopen
-                    @check curl_multi_socket_action_retry(multi.handle, sock, flags)
+                    @reentrant_guard curl_multi_socket_action_retry(multi.handle, sock, flags)
                     check_multi_info(multi)
                 end
             end

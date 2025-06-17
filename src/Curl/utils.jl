@@ -55,6 +55,23 @@ macro check(ex::Expr)
     end
 end
 
+# retry a curl_multi call if it fails because a callback has not returned - otherwise similar to @check
+
+macro reentrant_guard(ex::Expr)
+    prefix = "$(ex.args[1]): "
+    quote
+        r = 0
+        for n in 1:5
+            r = $(esc(ex))
+            r == CURLM_RECURSIVE_API_CALL || break
+            # yield back to event loop so the socket_callback can return
+            yield()
+        end
+        iszero(r) || @async @error $prefix * string(r) maxlog=1_000
+        r
+    end
+end
+
 # curl string list structure
 
 struct curl_slist_t
