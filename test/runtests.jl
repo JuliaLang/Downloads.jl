@@ -749,12 +749,12 @@ include("setup.jl")
     end
 
     @__MODULE__() == Main && @testset "ftp download" begin
-        url = "ftp://xmlsoft.org/libxslt/libxslt-1.1.33.tar.gz"
+        url = "ftp://ftp.gnu.org/gnu/auctex/auctex-13.3.tar.gz"
         file = Downloads.download(url)
         @test isfile(file)
-        @test filesize(file) == 3444093
+        @test filesize(file) == 1695608
         head = String(read!(open(file), Vector{UInt8}(undef, 16)))
-        @test head == "\x1f\x8b\b\0\xa5T.\\\x02\x03\xec]{s۶"
+        @test head == "\x1f\x8b\b\0\0\0\0\0\x02\x03\xec[\xebr\xdb\xc6"
     end
 
     @testset "grace cleanup" begin
