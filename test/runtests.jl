@@ -4,8 +4,11 @@ include("setup.jl")
     @testset "libcurl configuration" begin
         julia = "$(VERSION.major).$(VERSION.minor)"
         @test Curl.USER_AGENT == "curl/$(Curl.CURL_VERSION) julia/$julia"
-        if VERSION > v"1.6-"
+        if Curl.CURL_VERSION < v"8.15"
             @test Curl.SYSTEM_SSL == Sys.iswindows() | Sys.isapple()
+        else
+            # Starting with curl 8.15 we use OpenSSL on Apple platforms
+            @test Curl.SYSTEM_SSL == Sys.iswindows()
         end
     end
 
