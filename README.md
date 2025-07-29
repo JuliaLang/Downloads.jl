@@ -55,7 +55,9 @@ If the `downloader` keyword argument is provided, it must be a `Downloader`
 object. Resources and connections will be shared between downloads performed by
 the same `Downloader` and cleaned up automatically when the object is garbage
 collected or there have been no downloads performed with it for a grace period.
-See `Downloader` for more info about configuration and usage.
+Note that when multithreading it may be beneficial to use task-local `Downloader`
+objects when running concurrent tasks. See `Downloader` for more info about configuration
+and usage.
 
 If the `headers` keyword argument is provided, it must be a vector or dictionary
 whose elements are all pairs of strings. These pairs are passed as headers when
@@ -141,11 +143,11 @@ running request, for example if the user wants to cancel a download.
 ```jl
     default_downloader!(
         downloader = <none>
-    ) 
+    )
 ```
 - `downloader :: Downloader`
 
-Set the default `Downloader`. If no argument is provided, resets the default downloader 
+Set the default `Downloader`. If no argument is provided, resets the default downloader
 so that a fresh one is created the next time the default downloader is needed.
 
 ### Response
@@ -214,6 +216,8 @@ garbage collected, whichever comes first. If the grace period is set to zero,
 all resources will be cleaned up immediately as soon as there are no more
 ongoing downloads in progress. If the grace period is set to `Inf` then
 resources are not cleaned up until `Downloader` is garbage collected.
+Note that when multithreading it may be beneficial to use task-local `Downloader`
+objects when running concurrent tasks.
 
 
 ## Mutual TLS using Downloads
