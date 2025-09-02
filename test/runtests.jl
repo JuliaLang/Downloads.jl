@@ -777,6 +777,27 @@ include("setup.jl")
         @test Downloads.content_length(["Accept"=>"*/*",]) === nothing
         @test Downloads.content_length(["Accept"=>"*/*", "Content-Length"=>"100"]) == 100
     end
+
+    @testset "Global easy hooks" begin
+        trip_wire = 0
+        original_hook_count = length(Downloads.GLOBAL_HOOKS)
+        url = "$server/get"
+        hook = (easy, info) -> trip_wire += 1
+        key1 = pushhook!(hook)
+        _ = download_body(url)
+        @test trip_wire == 1
+        key2 = pushhook!(hook)
+        _ = download_body(url)
+        @test trip_wire == 3
+        deletehook!(key1)
+        _ = download_body(url)
+        @test trip_wire == 4
+        deletehook!(key2)
+        _ = download_body(url)
+        @test trip_wire == 4
+
+        @test length(Downloads.GLOBAL_HOOKS) == original_hook_count
+    end
 end
 
 Downloads.DOWNLOADER[] = nothing
