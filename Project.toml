@@ -11,7 +11,7 @@ NetworkOptions = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 
 [compat]
 ArgTools = "1.1"
-LibCURL = "0.6"
+LibCURL = "0.6, 1"
 NetworkOptions = "1.2"
 julia = "1.10"
 
