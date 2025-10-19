@@ -547,24 +547,70 @@ include("setup.jl")
             @test_skip "concurrent requests flakey on Windows"
         else
             mine = Downloader()
+
+            delay = 2
+            count = 100
+            get_url = "$server/delay/$delay"
+            post_url = "$server/post"
+            post_data = "Hello, world!"
+
+            test_post_json = (downloader) -> begin
+                _, json = request_json(post_url, input=IOBuffer(post_data), method="POST", downloader = downloader)
+                @test json["url"] == post_url
+                @test json["data"] == post_data
+            end
+
+            test_get_json = (id, downloader) -> begin
+                json = download_json("$get_url?id=$id"; downloader)
+                @test get(json["args"], "id", nothing) == ["$id"]
+            end
+
+            thread_count=Base.Threads.nthreads()
+            @info("starting concurrent requests test",
+                get_url=get_url,
+                post_url=post_url,
+                thread_count=thread_count,
+            )
+            # thread_options = (thread_count > 1 ? (false, true) : (true,))
+            thread_options = (false, true)
+
             for downloader in (nothing, mine)
                 have_lsof = Sys.which("lsof") !== nothing
                 count_tcp() = Base.count(x->contains("TCP",x), split(read(`lsof -p $(getpid())`, String), '\n'))
                 if have_lsof
                     n_tcp = count_tcp()
                 end
-                delay = 2
-                count = 100
-                url = "$server/delay/$delay"
-                t = @elapsed @sync for id = 1:count
-                    @async begin
-                        json = download_json("$url?id=$id"; downloader)
-                        @test get(json["args"], "id", nothing) == ["$id"]
+                for method in (:get, :post)
+                    for use_threads in thread_options
+                        @info("concurrent requests test",
+                            is_default_downloader=(downloader === nothing),
+                            method=method,
+                            use_threads=use_threads,
+                        )
+                        t = @elapsed @sync for id = 1:count
+                            if use_threads
+                                Base.Threads.@spawn begin
+                                    if method == :get
+                                        test_get_json(id, downloader)
+                                    else
+                                        test_post_json(downloader)
+                                    end
+                                end
+                            else
+                                @async begin
+                                    if method == :get
+                                        test_get_json(id, downloader)
+                                    else
+                                        test_post_json(downloader)
+                                    end
+                                end
+                            end
+                        end
+                        @test t < 0.9*count*delay
+                        if have_lsof
+                            @test n_tcp == count_tcp()
+                        end
                     end
-                end
-                @test t < 0.9*count*delay
-                if have_lsof
-                    @test n_tcp == count_tcp()
                 end
             end
         end
