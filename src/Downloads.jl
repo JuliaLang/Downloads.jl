@@ -268,9 +268,9 @@ function download(
         name = something(url_filename(url), DEFAULT_FILENAME)
         output = joinpath(mktempdir(), name)
     end
-    local response # capture outside closure
+    response = Ref{Response}() #
     path = arg_write(output) do output
-        response = request(
+        response[] = request(
             url,
             output = output,
             method = method,
@@ -280,13 +280,13 @@ function download(
             verbose = verbose,
             debug = debug,
             downloader = downloader,
-        )::Response
-        status_ok(response) && return output
-        throw(RequestError(url, Curl.CURLE_OK, "", response))
+        )
+        status_ok(response[]) && return output
+        throw(RequestError(url, Curl.CURLE_OK, "", response[]))
     end
     # fix file suffix based on headers & redirected URL
     if try_rename && ispath(path)
-        name = get_filename(response)
+        name = get_filename(response[])
         if name !== nothing
             path′ = joinpath(dirname(path), name)
             @assert dirname(path) == dirname(path′)
@@ -367,24 +367,29 @@ function request(
     interrupt  :: Union{Nothing, Base.Event} = nothing,
 ) :: Union{Response, RequestError}
     if downloader === nothing
-        lock(DOWNLOAD_LOCK) do
+        @lock DOWNLOAD_LOCK begin
             downloader = DOWNLOADER[]
             if downloader === nothing
                 downloader = DOWNLOADER[] = Downloader()
             end
         end
     end
-    local response
+    # single assignment to variable used in closure to avoid boxing
+    downloader′ = downloader
     have_input = input !== nothing
     have_output = output !== nothing
     input = something(input, devnull)
     output = something(output, devnull)
-    input_size = arg_read_size(input)
-    if input_size === nothing
+    _input_size = arg_read_size(input)
+    if _input_size === nothing
         # take input_size from content-length header if one is supplied
-        input_size = content_length(headers)
+        _input_size = content_length(headers)
     end
+    # single assignment to variable used in closure to avoid boxing
+    input_size = _input_size
+
     progress = p_func(progress, input, output)
+    response = Ref{Union{Response, RequestError}}()
     arg_read(input) do input
         arg_write(output) do output
             with_handle(Easy()) do easy
@@ -417,19 +422,19 @@ function request(
                 end
                 method !== nothing && set_method(easy, method)
                 progress !== nothing && enable_progress(easy)
-                set_ca_roots(downloader, easy)
+                set_ca_roots(downloader′, easy)
                 info = (url = url, method = method, headers = headers)
-                easy_hook(downloader, easy, info)
+                easy_hook(downloader′, easy, info)
 
                 # do the request
-                add_handle(downloader.multi, easy)
+                add_handle(downloader′.multi, easy)
                 interrupted = Threads.Atomic{Bool}(false)
                 if interrupt !== nothing
                     interrupt_task = @async begin
                         # wait for the interrupt event
                         wait(interrupt)
                         # cancel the request
-                        remove_handle(downloader.multi, easy)
+                        remove_handle(downloader′.multi, easy)
                         close(easy.output)
                         close(easy.progress)
                         interrupted[] = true
@@ -460,14 +465,14 @@ function request(
                             notify(interrupt)
                             wait(interrupt_task)
                         else
-                            remove_handle(downloader.multi, easy)
+                            remove_handle(downloader′.multi, easy)
                         end
                     end
                 end
 
                 # return the response or throw an error
-                response = Response(get_response_info(easy)...)
-                easy.code == Curl.CURLE_OK && return response
+                response[] = Response(get_response_info(easy)...)
+                easy.code == Curl.CURLE_OK && return
                 message = get_curl_errstr(easy)
                 if easy.code == typemax(Curl.CURLcode)
                     # uninitialized code, likely a protocol error
@@ -475,12 +480,12 @@ function request(
                 else
                     code = Int(easy.code)
                 end
-                response = RequestError(url, code, message, response)
-                throw && Base.throw(response)
+                response[] = RequestError(url, code, message, response[])
+                throw && Base.throw(response[])
             end
         end
     end
-    return response
+    return response[]
 end
 
 ## helper functions ##
