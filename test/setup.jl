@@ -81,6 +81,8 @@ function url_escape(str::Union{String, SubString{String}})
 end
 url_escape(str::AbstractString) = url_escape(String(str))
 
+# Note: This only affects the server used in the Downloads.jl tests
+# It does not affect the server used in the `julia/test/download.jl` test (which is in Base Julia)
 const default_server = "https://httpbingo.julialang.org"
 const server = get(ENV, "JULIA_TEST_HTTPBINGO_SERVER", default_server)
 
