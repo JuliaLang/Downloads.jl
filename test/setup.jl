@@ -8,7 +8,9 @@ using Base.Experimental: @sync
 
 include("json.jl")
 
-@test isempty(Test.detect_closure_boxes(Downloads))
+if isdefined(Test, :detect_closure_boxes)
+    @test isempty(Test.detect_closure_boxes(Downloads))
+end
 
 function download_body(url::AbstractString; kwargs...)
     sprint() do output
