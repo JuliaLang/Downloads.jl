@@ -8,6 +8,8 @@ using Base.Experimental: @sync
 
 include("json.jl")
 
+@test isempty(Test.detect_closure_boxes(Downloads))
+
 function download_body(url::AbstractString; kwargs...)
     sprint() do output
         download(url, output; kwargs...)
