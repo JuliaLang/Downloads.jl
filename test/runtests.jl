@@ -652,6 +652,34 @@ const ABORT_SOCKET_CALLBACK = @cfunction(
             @test response isa Response
         end
 
+        @testset "failed recovery cleanup" begin
+            multi = Curl.Multi()
+            Curl.with_handle(Curl.Easy()) do easy
+                Curl.set_url(easy, "file://$(abspath(@__FILE__))")
+                Curl.add_handle(multi, easy)
+                @test Curl.curl_multi_remove_handle(multi.handle, easy.handle) ==
+                    Curl.CURLM_OK
+                Curl.done!(multi)
+
+                @test_logs(
+                    (:error, r"forced_recovery: 1"),
+                    (:error, r"curl_multi_remove_handle: 1"),
+                    begin
+                        Curl.fail_multi!(multi, :forced_recovery, Curl.CURLM_BAD_HANDLE)
+                        @test timedwait(() -> !multi.failed, 5) == :ok
+                    end,
+                )
+                @test easy.code == Curl.CURLE_ABORTED_BY_CALLBACK
+                @test isempty(multi.easies)
+                Curl.remove_handle(multi, easy)
+            end
+
+            output = IOBuffer()
+            response = request("file://$(abspath(@__FILE__))";
+                output, downloader=Downloader(multi), throw=false)
+            @test response isa Response
+        end
+
         @testset "recursive debug callback" begin
             downloader = Downloader()
             nested = Ref{Union{Nothing,Response,RequestError}}(nothing)

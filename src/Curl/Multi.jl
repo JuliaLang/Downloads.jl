@@ -176,7 +176,8 @@ function recover_multi!(multi::Multi, operation::Symbol, code::CURLMcode)
                 result = curl_multi_remove_handle(multi.handle, easy.handle)
                 # A callback may yield after scheduling recovery.
                 result == CURLM_RECURSIVE_API_CALL && return true
-                result == CURLM_OK || error("curl_multi_remove_handle: $result")
+                result == CURLM_OK || @error(
+                    "curl_multi_remove_handle: $result", maxlog=1_000)
             end
             easies = copy(multi.easies)
             empty!(multi.easies)
