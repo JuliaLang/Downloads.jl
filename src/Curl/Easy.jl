@@ -366,23 +366,6 @@ function header_callback(
     end
 end
 
-# feed data to read_callback
-function upload_data(easy::Easy, input::IO)
-    while true
-        data = eof(input) ? nothing : readavailable(input)
-        easy.input === nothing && break
-        easy.input = data
-        curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
-        wait(easy.ready)
-        easy.input === nothing && break
-        if hasmethod(reset, (Base.Event,))
-            reset(easy.ready)
-        else
-            easy.ready = Threads.Event()
-        end
-    end
-end
-
 function read_callback(
     data   :: Ptr{Cchar},
     size   :: Csize_t,

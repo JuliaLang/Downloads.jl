@@ -455,7 +455,7 @@ function request(
                             end
                         end
                         if have_input
-                            @async upload_data(easy, input)
+                            @async upload_data(downloader′.multi, easy, input)
                         end
                     end
                 finally

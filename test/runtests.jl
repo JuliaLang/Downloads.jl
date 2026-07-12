@@ -571,6 +571,30 @@ include("setup.jl")
     end
 
     @testset "request API" begin
+        @testset "upload serialization" begin
+            Curl.with_handle(Curl.Multi()) do multi
+                Curl.with_handle(Curl.Easy()) do easy
+                    locked = Channel{Nothing}(1)
+                    release = Base.Event()
+                    holder = Threads.@spawn lock(multi.lock) do
+                        put!(locked, nothing)
+                        wait(release)
+                    end
+                    take!(locked)
+
+                    notify(easy.ready)
+                    upload = Threads.@spawn Curl.upload_data(multi, easy, IOBuffer())
+                    yield()
+                    @test !istaskdone(upload)
+
+                    notify(release)
+                    @test timedwait(() -> istaskdone(holder) && istaskdone(upload), 5) == :ok
+                    wait(holder)
+                    wait(upload)
+                end
+            end
+        end
+
         @testset "basic request usage" begin
             for status in [200, 400, 404]
                 url = "$server/status/$status"

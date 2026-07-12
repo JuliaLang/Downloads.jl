@@ -94,6 +94,28 @@ function set_defaults(multi::Multi)
     # currently no defaults
 end
 
+# feed data to read_callback
+function upload_data(multi::Multi, easy::Easy, input::IO)
+    while true
+        data = eof(input) ? nothing : readavailable(input)
+        stopped = lock(multi.lock) do
+            easy.input === nothing && return true
+            easy.input = data
+            # Unpausing can invoke multi callbacks before returning.
+            curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
+            return false
+        end
+        stopped && break
+        wait(easy.ready)
+        easy.input === nothing && break
+        if hasmethod(reset, (Base.Event,))
+            reset(easy.ready)
+        else
+            easy.ready = Threads.Event()
+        end
+    end
+end
+
 # multi-socket handle state updates
 
 struct CURLMsg
