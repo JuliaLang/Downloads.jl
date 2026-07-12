@@ -611,6 +611,24 @@ const ABORT_SOCKET_CALLBACK = @cfunction(
             end
         end
 
+        @testset "grace cleanup with active handles" begin
+            Curl.with_handle(Curl.Multi()) do multi
+                Curl.init!(multi)
+                handle = multi.handle
+                timer = Timer(60)
+                multi.timer = timer
+
+                Curl.with_handle(Curl.Easy()) do easy
+                    push!(multi.easies, easy)
+                    Curl.expire_multi!(multi, timer)
+                    @test multi.handle == handle
+                    @test multi.timer === nothing
+                    empty!(multi.easies)
+                end
+                close(timer)
+            end
+        end
+
         @testset "multi callback failure" begin
             multi = Curl.Multi()
             Curl.with_handle(Curl.Easy()) do easy

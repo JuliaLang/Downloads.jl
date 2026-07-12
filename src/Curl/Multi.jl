@@ -97,11 +97,7 @@ function remove_handle(multi::Multi, easy::Easy)
                 done!(multi)
             elseif 0 < multi.grace < typemax(multi.grace)
                 multi.timer = Timer(multi.grace/1000) do timer
-                    lock(multi.lock) do
-                        multi.timer === timer || return
-                        multi.timer = nothing
-                        done!(multi)
-                    end
+                    expire_multi!(multi, timer)
                 end
             end
             unpreserve_handle(multi)
@@ -111,6 +107,15 @@ function remove_handle(multi::Multi, easy::Easy)
         wait(recovered)
     end
     connect_semaphore_release(easy)
+end
+
+function expire_multi!(multi::Multi, timer::Timer)
+    lock(multi.lock) do
+        multi.timer === timer || return
+        multi.timer = nothing
+        isempty(multi.easies) || return
+        done!(multi)
+    end
 end
 
 # multi-socket options
