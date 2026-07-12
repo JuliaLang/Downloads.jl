@@ -1,5 +1,21 @@
 include("setup.jl")
 
+function abort_socket_callback(
+    easy_h    :: Ptr{Cvoid},
+    sock      :: Curl.curl_socket_t,
+    action    :: Cint,
+    multi_p   :: Ptr{Cvoid},
+    watcher_p :: Ptr{Cvoid},
+)::Cint
+    return -1
+end
+
+const ABORT_SOCKET_CALLBACK = @cfunction(
+    abort_socket_callback,
+    Cint,
+    (Ptr{Cvoid}, Curl.curl_socket_t, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
+)
+
 @testset "Downloads.jl" begin
     @testset "libcurl configuration" begin
         julia = "$(VERSION.major).$(VERSION.minor)"
@@ -593,6 +609,55 @@ include("setup.jl")
                     wait(upload)
                 end
             end
+        end
+
+        @testset "multi callback failure" begin
+            multi = Curl.Multi()
+            Curl.with_handle(Curl.Easy()) do easy
+                Curl.set_url(easy, "$server/delay/1")
+                Curl.set_body(easy, true)
+                Curl.init!(multi)
+                Curl.setopt(multi, Curl.CURLMOPT_SOCKETFUNCTION, ABORT_SOCKET_CALLBACK)
+                Curl.add_handle(multi, easy)
+
+                @test timedwait(() -> easy.code != typemax(Curl.CURLcode), 5) == :ok
+                @test easy.code == Curl.CURLE_ABORTED_BY_CALLBACK
+                @test timedwait(() -> !multi.failed, 5) == :ok
+                @test isempty(multi.easies)
+                @test multi.handle == C_NULL
+                Curl.remove_handle(multi, easy)
+            end
+
+            output = IOBuffer()
+            downloader = Downloader(multi)
+            response = request("$server/get"; output, downloader, throw=false)
+            @test response isa Response
+        end
+
+        @testset "recursive debug callback" begin
+            downloader = Downloader()
+            nested = Ref{Union{Nothing,Response,RequestError}}(nothing)
+            entered = Ref(false)
+            debug = function (type, message)
+                entered[] && return
+                entered[] = true
+                nested[] = request("file://$(abspath(@__FILE__))";
+                    output=IOBuffer(), downloader, throw=false)
+            end
+
+            outer = @test_logs (:error, r"curl_multi_add_handle: 8") request(
+                "$server/delay/1";
+                output=IOBuffer(), debug, downloader, throw=false,
+            )
+            @test nested[] isa RequestError
+            @test nested[].code == Curl.CURLE_ABORTED_BY_CALLBACK
+            @test outer isa RequestError
+            @test timedwait(() -> !downloader.multi.failed, 5) == :ok
+
+            output = IOBuffer()
+            response = request("file://$(abspath(@__FILE__))";
+                output, downloader, throw=false)
+            @test response isa Response
         end
 
         @testset "basic request usage" begin
