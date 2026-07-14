@@ -1,5 +1,10 @@
 include("setup.jl")
 
+expected_arg(arg) = arg
+@static if isdefined(ArgTools, :FileSpec)
+    expected_arg(arg::ArgTools.FileSpec) = arg.path
+end
+
 @testset "Downloads.jl" begin
     @testset "libcurl configuration" begin
         julia = "$(VERSION.major).$(VERSION.minor)"
@@ -30,14 +35,14 @@ include("setup.jl")
         # test with two arguments
         arg_writers() do path, output
             @arg_test output begin
-                @test output == download(url, output)
+                @test expected_arg(output) == download(url, output)
             end
             @test isfile(path)
             @test value == read(path, String)
             rm(path)
             # with headers
             @arg_test output begin
-                @test output == download(url, output; headers)
+                @test expected_arg(output) == download(url, output; headers)
             end
             @test isfile(path)
             @test value == read(path, String)
