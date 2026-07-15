@@ -437,7 +437,7 @@ function request(
                         remove_handle(downloader′.multi, easy)
                         close(easy.output)
                         close(easy.progress)
-                        interrupted[] = true
+                        Threads.atomic_xchg!(interrupted, true)
                         close(input)
                         notify(easy.ready)
                     end
