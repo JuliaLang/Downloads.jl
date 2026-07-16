@@ -1,5 +1,21 @@
 include("setup.jl")
 
+function abort_socket_callback(
+    easy_h    :: Ptr{Cvoid},
+    sock      :: Curl.curl_socket_t,
+    action    :: Cint,
+    multi_p   :: Ptr{Cvoid},
+    watcher_p :: Ptr{Cvoid},
+)::Cint
+    return -1
+end
+
+const ABORT_SOCKET_CALLBACK = @cfunction(
+    abort_socket_callback,
+    Cint,
+    (Ptr{Cvoid}, Curl.curl_socket_t, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
+)
+
 expected_arg(arg) = arg
 @static if isdefined(ArgTools, :FileSpec)
     expected_arg(arg::ArgTools.FileSpec) = arg.path
@@ -576,6 +592,125 @@ end
     end
 
     @testset "request API" begin
+        @testset "upload serialization" begin
+            Curl.with_handle(Curl.Multi()) do multi
+                Curl.with_handle(Curl.Easy()) do easy
+                    locked = Channel{Nothing}(1)
+                    release = Base.Event()
+                    holder = Threads.@spawn lock(multi.lock) do
+                        put!(locked, nothing)
+                        wait(release)
+                    end
+                    take!(locked)
+
+                    notify(easy.ready)
+                    upload = Threads.@spawn Curl.upload_data(multi, easy, IOBuffer())
+                    yield()
+                    @test !istaskdone(upload)
+
+                    notify(release)
+                    @test timedwait(() -> istaskdone(holder) && istaskdone(upload), 5) == :ok
+                    wait(holder)
+                    wait(upload)
+                end
+            end
+        end
+
+        @testset "grace cleanup with active handles" begin
+            Curl.with_handle(Curl.Multi()) do multi
+                Curl.init!(multi)
+                handle = multi.handle
+                timer = Timer(60)
+                multi.timer = timer
+
+                Curl.with_handle(Curl.Easy()) do easy
+                    push!(multi.easies, easy)
+                    Curl.expire_multi!(multi, timer)
+                    @test multi.handle == handle
+                    @test multi.timer === nothing
+                    empty!(multi.easies)
+                end
+                close(timer)
+            end
+        end
+
+        @testset "multi callback failure" begin
+            multi = Curl.Multi()
+            Curl.with_handle(Curl.Easy()) do easy
+                Curl.set_url(easy, "$server/delay/1")
+                Curl.set_body(easy, true)
+                Curl.init!(multi)
+                Curl.setopt(multi, Curl.CURLMOPT_SOCKETFUNCTION, ABORT_SOCKET_CALLBACK)
+                Curl.add_handle(multi, easy)
+
+                @test timedwait(() -> easy.code != typemax(Curl.CURLcode), 5) == :ok
+                @test easy.code == Curl.CURLE_ABORTED_BY_CALLBACK
+                @test timedwait(() -> !multi.failed, 5) == :ok
+                @test isempty(multi.easies)
+                @test multi.handle == C_NULL
+                Curl.remove_handle(multi, easy)
+            end
+
+            output = IOBuffer()
+            downloader = Downloader(multi)
+            response = request("$server/get"; output, downloader, throw=false)
+            @test response isa Response
+        end
+
+        @testset "failed recovery cleanup" begin
+            multi = Curl.Multi()
+            Curl.with_handle(Curl.Easy()) do easy
+                Curl.set_url(easy, "file://$(abspath(@__FILE__))")
+                Curl.add_handle(multi, easy)
+                @test Curl.curl_multi_remove_handle(multi.handle, easy.handle) ==
+                    Curl.CURLM_OK
+                Curl.done!(multi)
+
+                @test_logs(
+                    (:error, r"forced_recovery: 1"),
+                    (:error, r"curl_multi_remove_handle: 1"),
+                    begin
+                        Curl.fail_multi!(multi, :forced_recovery, Curl.CURLM_BAD_HANDLE)
+                        @test timedwait(() -> !multi.failed, 5) == :ok
+                    end,
+                )
+                @test easy.code == Curl.CURLE_ABORTED_BY_CALLBACK
+                @test isempty(multi.easies)
+                Curl.remove_handle(multi, easy)
+            end
+
+            output = IOBuffer()
+            response = request("file://$(abspath(@__FILE__))";
+                output, downloader=Downloader(multi), throw=false)
+            @test response isa Response
+        end
+
+        @testset "recursive debug callback" begin
+            downloader = Downloader()
+            nested = Ref{Union{Nothing,Response,RequestError}}(nothing)
+            entered = Ref(false)
+            debug = function (type, message)
+                entered[] && return
+                entered[] = true
+                nested[] = request("file://$(abspath(@__FILE__))";
+                    output=IOBuffer(), downloader, throw=false)
+            end
+
+            outer = @test_logs (:error, r"curl_multi_add_handle: 8") request(
+                "$server/delay/1";
+                output=IOBuffer(), debug, downloader, throw=false,
+            )
+            @test nested[] isa RequestError
+            @test nested[].code == Curl.CURLE_ABORTED_BY_CALLBACK
+            @test outer isa RequestError
+            @test timedwait(() -> !downloader.multi.failed, 5) == :ok
+
+            output = IOBuffer()
+            response = request("file://$(abspath(@__FILE__))";
+                output, downloader, throw=false)
+            @test response isa Response
+        end
+
         @testset "basic request usage" begin
             for status in [200, 400, 404]
                 url = "$server/status/$status"

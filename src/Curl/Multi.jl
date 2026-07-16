@@ -4,9 +4,13 @@ mutable struct Multi
     timer  :: Union{Nothing,Timer}
     easies :: Vector{Easy}
     grace  :: UInt64
+    failed    :: Bool
+    recovered :: Base.Event
 
     function Multi(grace::Integer = typemax(UInt64))
-        multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
+        recovered = Base.Event()
+        notify(recovered)
+        multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace, false, recovered)
         finalizer(done!, multi)
         @lock MULTIS_LOCK push!(filter!(m -> m.value isa Multi, MULTIS), WeakRef(multi))
         return multi
@@ -53,39 +57,65 @@ end
 
 function add_handle(multi::Multi, easy::Easy)
     connect_semaphore_acquire(easy)
-    lock(multi.lock) do
-        if isempty(multi.easies)
-            preserve_handle(multi)
+    added = lock(multi.lock) do
+        if multi.failed
+            abort_easy!(easy)
+            return false
         end
-        push!(multi.easies, easy)
         init!(multi)
-        @check curl_multi_add_handle(multi.handle, easy.handle)
+        code = curl_multi_add_handle(multi.handle, easy.handle)
+        if code != CURLM_OK
+            fail_multi!(multi, :curl_multi_add_handle, code)
+            abort_easy!(easy)
+            return false
+        end
+        isempty(multi.easies) && preserve_handle(multi)
+        push!(multi.easies, easy)
+        return true
     end
+    added || connect_semaphore_release(easy)
 end
 
 const MULTIS_LOCK = Base.ReentrantLock()
 const MULTIS = WeakRef[]
 
 function remove_handle(multi::Multi, easy::Easy)
-    lock(multi.lock) do
-        @check curl_multi_remove_handle(multi.handle, easy.handle)
-        deleteat!(multi.easies, findlast(==(easy), multi.easies)::Int)
-        isempty(multi.easies) || return
-        stoptimer!(multi)
-        if multi.grace <= 0
-            done!(multi)
-        elseif 0 < multi.grace < typemax(multi.grace)
-            multi.timer = Timer(multi.grace/1000) do timer
-                lock(multi.lock) do
-                    multi.timer === timer || return
-                    multi.timer = nothing
-                    done!(multi)
+    while true
+        recovered = lock(multi.lock) do
+            i = findlast(==(easy), multi.easies)
+            i === nothing && return nothing
+            multi.failed && return multi.recovered
+            code = curl_multi_remove_handle(multi.handle, easy.handle)
+            if code != CURLM_OK
+                fail_multi!(multi, :curl_multi_remove_handle, code)
+                return multi.recovered
+            end
+            deleteat!(multi.easies, i)
+            isempty(multi.easies) || return nothing
+            stoptimer!(multi)
+            if multi.grace <= 0
+                done!(multi)
+            elseif 0 < multi.grace < typemax(multi.grace)
+                multi.timer = Timer(multi.grace/1000) do timer
+                    expire_multi!(multi, timer)
                 end
             end
+            unpreserve_handle(multi)
+            return nothing
         end
-        unpreserve_handle(multi)
+        recovered === nothing && break
+        wait(recovered)
     end
     connect_semaphore_release(easy)
+end
+
+function expire_multi!(multi::Multi, timer::Timer)
+    lock(multi.lock) do
+        multi.timer === timer || return
+        multi.timer = nothing
+        isempty(multi.easies) || return
+        done!(multi)
+    end
 end
 
 # multi-socket options
@@ -94,7 +124,78 @@ function set_defaults(multi::Multi)
     # currently no defaults
 end
 
+# feed data to read_callback
+function upload_data(multi::Multi, easy::Easy, input::IO)
+    while true
+        data = eof(input) ? nothing : readavailable(input)
+        stopped = lock(multi.lock) do
+            easy.input === nothing && return true
+            easy.input = data
+            # Unpausing can invoke multi callbacks before returning.
+            curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
+            return false
+        end
+        stopped && break
+        wait(easy.ready)
+        easy.input === nothing && break
+        if hasmethod(reset, (Base.Event,))
+            reset(easy.ready)
+        else
+            easy.ready = Threads.Event()
+        end
+    end
+end
+
 # multi-socket handle state updates
+
+function abort_easy!(easy::Easy)
+    easy.code = CURLE_ABORTED_BY_CALLBACK
+    close(easy.progress)
+    close(easy.output)
+    easy.input = nothing
+    notify(easy.ready)
+    nothing
+end
+
+function fail_multi!(multi::Multi, operation::Symbol, code::CURLMcode)
+    multi.failed && return
+    multi.failed = true
+    reset(multi.recovered)
+    # Recover after returning from the libcurl callback stack.
+    task = @async recover_multi!(multi, operation, code)
+    @isdefined(errormonitor) && errormonitor(task)
+    nothing
+end
+
+function recover_multi!(multi::Multi, operation::Symbol, code::CURLMcode)
+    @error "$operation: $code" maxlog=1_000
+    while true
+        retry = lock(multi.lock) do
+            multi.failed || return false
+            for easy in multi.easies
+                result = curl_multi_remove_handle(multi.handle, easy.handle)
+                # A callback may yield after scheduling recovery.
+                result == CURLM_RECURSIVE_API_CALL && return true
+                result == CURLM_OK || @error(
+                    "curl_multi_remove_handle: $result", maxlog=1_000)
+            end
+            easies = copy(multi.easies)
+            empty!(multi.easies)
+            isempty(easies) || unpreserve_handle(multi)
+            stoptimer!(multi)
+            done!(multi)
+            for easy in easies
+                abort_easy!(easy)
+                connect_semaphore_release(easy)
+            end
+            multi.failed = false
+            notify(multi.recovered)
+            return false
+        end
+        retry || return
+        yield()
+    end
+end
 
 struct CURLMsg
    msg  :: CURLMSG
@@ -127,7 +228,12 @@ end
 # curl callbacks
 
 function do_multi(multi::Multi)
-    @check curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+    multi.failed && return
+    code = curl_multi_socket_action(multi.handle, CURL_SOCKET_TIMEOUT, 0)
+    if code != CURLM_OK
+        fail_multi!(multi, :curl_multi_socket_action, code)
+        return
+    end
     check_multi_info(multi)
 end
 
@@ -196,8 +302,13 @@ function socket_callback(
                         CURL_CSELECT_OUT * iswritable(events) +
                         CURL_CSELECT_ERR * (events.disconnect || events.timedout)
                 lock(multi.lock) do
+                    multi.failed && return
                     watcher.readable || watcher.writable || return # !isopen
-                    @check curl_multi_socket_action(multi.handle, sock, flags)
+                    code = curl_multi_socket_action(multi.handle, sock, flags)
+                    if code != CURLM_OK
+                        fail_multi!(multi, :curl_multi_socket_action, code)
+                        return
+                    end
                     check_multi_info(multi)
                 end
             end
