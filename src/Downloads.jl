@@ -351,6 +351,11 @@ If the `interrupt` keyword argument is provided, it must be a `Base.Event` objec
 If the event is triggered while the request is in progress, the request will be
 cancelled and an error will be thrown. This can be used to interrupt a long
 running request, for example if the user wants to cancel a download.
+
+On Julia 1.14 and later, cancelling the scope the request runs in (which is how
+a `^C` in the REPL arrives) aborts the transfer in the same way: the request
+unwinds with a `CancellationRequest`, and its handle is removed from the
+downloader, whose other requests are unaffected.
 """
 function request(
     url        :: AbstractString;
@@ -428,23 +433,37 @@ function request(
 
                 # do the request
                 add_handle(downloader′.multi, easy)
-                interrupted = Threads.Atomic{Bool}(false)
-                if interrupt !== nothing
-                    interrupt_task = @async begin
+                # Take the transfer out of the multi, and if it is being aborted rather than
+                # completing, release the tasks feeding on it. Runs once, from whichever of
+                # the interrupt event and the request's own unwinding gets there first, and
+                # to completion even if the request's scope has been cancelled: the handle
+                # is freed right after, and the multi must be done with it by then.
+                torn_down = Ref(false)
+                teardown_lock = ReentrantLock()
+                function teardown(abort::Bool)
+                    lock(teardown_lock) do
+                        torn_down[] && return
+                        torn_down[] = true
+                        remove_handle(downloader′.multi, easy)
+                        if abort
+                            close(easy.output)
+                            close(easy.progress)
+                            close(input)
+                            notify(easy.ready)
+                        end
+                    end
+                end
+                interrupt_task = if interrupt === nothing
+                    nothing
+                else
+                    @async begin
                         # wait for the interrupt event
                         wait(interrupt)
                         # cancel the request
-                        remove_handle(downloader′.multi, easy)
-                        close(easy.output)
-                        close(easy.progress)
-                        Threads.atomic_xchg!(interrupted, true)
-                        close(input)
-                        notify(easy.ready)
+                        shielded(teardown, true)
                     end
-                else
-                    interrupt_task = nothing
                 end
-                try # ensure handle is removed
+                try
                     @sync begin
                         @async for buf in easy.output
                             write(output, buf)
@@ -459,15 +478,10 @@ function request(
                         end
                     end
                 finally
-                    if !(interrupted[])
-                        if interrupt_task !== nothing
-                            # trigger interrupt
-                            notify(interrupt)
-                            wait(interrupt_task)
-                        else
-                            remove_handle(downloader′.multi, easy)
-                        end
-                    end
+                    # the event is also set when the request completes, releasing the
+                    # interrupt task, unless the cancellation of the scope already ended it
+                    interrupt === nothing || notify(interrupt)
+                    shielded(teardown, false)
                 end
 
                 # return the response or throw an error
