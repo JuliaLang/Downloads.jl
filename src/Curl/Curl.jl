@@ -1,6 +1,8 @@
 module Curl
 
 export
+    HAS_CANCELLATION,
+    shielded,
     with_handle,
     Easy,
         set_url,

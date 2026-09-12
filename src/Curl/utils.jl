@@ -1,3 +1,29 @@
+# Julia 1.14 gives every task a cancellation scope: cancelling it wakes the tasks parked
+# under it with a `CancellationRequest`, and a `^C` in the REPL cancels the scope of the
+# running evaluation. Two things follow for this package. The multi handle's plumbing, its
+# socket watcher tasks and timers, is spawned from libcurl callbacks, which run on whatever
+# task happened to call into libcurl, so it is given the multi as its owner rather than the
+# scope of that caller. And the teardown of a request has to run even once the request's
+# own scope has been cancelled. On older Julia none of this exists and all of it is a no-op.
+@static if isdefined(Base, :CancellationTokenSource) && isdefined(Base, :CANCEL_TOKEN)
+    const HAS_CANCELLATION = true
+    cancel_source() = Base.CancellationTokenSource()
+    cancel!(src::Base.CancellationTokenSource) = Base.cancel!(src)
+    # run `f`, with the tasks and timers it creates owned by `src`
+    owned(f, src::Base.CancellationTokenSource) =
+        Base.ScopedValues.with(f, Base.CANCEL_TOKEN => Base.CancellationToken(src))
+    # call `f(args...)` with cancellation of the enclosing scope masked
+    shielded(f, args...) = Base.ScopedValues.with(() -> f(args...), Base.CANCEL_TOKEN => nothing)
+    iscancellation(err) = err isa Base.CancellationRequest
+else
+    const HAS_CANCELLATION = false
+    cancel_source() = nothing
+    cancel!(::Nothing) = nothing
+    owned(f, ::Nothing) = f()
+    shielded(f, args...) = f(args...)
+    iscancellation(err) = false
+end
+
 # basic C stuff
 
 puts(s::Union{String,SubString{String}}) = ccall(:puts, Cint, (Ptr{Cchar},), s)

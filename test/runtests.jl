@@ -658,6 +658,32 @@ end
             @test download_task.result isa RequestError
         end
 
+        if Downloads.Curl.HAS_CANCELLATION
+            @testset "cancellation of the request's scope" begin
+                # how a `^C` arrives on Julia 1.14: the scope the request runs in is cancelled
+                dl = Downloader()
+                src = Base.CancellationTokenSource()
+                tok = Base.CancellationToken(src)
+                # a request in another scope on the same downloader must not be affected
+                other = @async request("$server/delay/3"; downloader = dl)
+                # (the function form, since the macro would not even parse on older Julia)
+                cancelled = @async Base.ScopedValues.with(Base.CANCEL_TOKEN => tok) do
+                    request("$server/delay/10"; downloader = dl, interrupt = Base.Event())
+                end
+                @test timedwait(() -> length(dl.multi.easies) == 2, 10.0) == :ok
+                Base.cancel!(src)
+                @test timedwait(() -> istaskdone(cancelled), 10.0) == :ok
+                @test istaskfailed(cancelled)
+                # the transfer was taken out of the multi before its handle was freed
+                @test length(dl.multi.easies) == 1
+                @test fetch(other).status == 200
+                @test isempty(dl.multi.easies)
+                # and the downloader keeps working: its socket watchers and timers are owned
+                # by its multi, not by the scope of the request whose callback created them
+                @test request("$server/get"; downloader = dl).status == 200
+            end
+        end
+
         @testset "progress" begin
             url = "$server/drip"
             progress = []

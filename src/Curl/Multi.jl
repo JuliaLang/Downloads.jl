@@ -4,9 +4,10 @@ mutable struct Multi
     timer  :: Union{Nothing,Timer}
     easies :: Vector{Easy}
     grace  :: UInt64
+    owner  :: Any # the cancellation source owning the handle's socket watchers and timers
 
     function Multi(grace::Integer = typemax(UInt64))
-        multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace)
+        multi = new(ReentrantLock(), C_NULL, nothing, Easy[], grace, nothing)
         finalizer(done!, multi)
         @lock MULTIS_LOCK push!(filter!(m -> m.value isa Multi, MULTIS), WeakRef(multi))
         return multi
@@ -16,9 +17,19 @@ end
 function init!(multi::Multi)
     multi.handle != C_NULL && return
     multi.handle = curl_multi_init()
+    multi.owner = cancel_source()
     add_callbacks(multi)
     set_defaults(multi)
     nothing
+end
+
+# Tear the handle down and cancel whatever of its plumbing is still around. Not for the
+# finalizer, which only calls `done!`.
+function finish!(multi::Multi)
+    done!(multi)
+    owner = multi.owner
+    multi.owner = nothing
+    cancel!(owner)
 end
 
 function done!(multi::Multi)
@@ -73,13 +84,15 @@ function remove_handle(multi::Multi, easy::Easy)
         isempty(multi.easies) || return
         stoptimer!(multi)
         if multi.grace <= 0
-            done!(multi)
+            finish!(multi)
         elseif 0 < multi.grace < typemax(multi.grace)
-            multi.timer = Timer(multi.grace/1000) do timer
-                lock(multi.lock) do
-                    multi.timer === timer || return
-                    multi.timer = nothing
-                    done!(multi)
+            multi.timer = owned(multi.owner) do
+                Timer(multi.grace/1000) do timer
+                    lock(multi.lock) do
+                        multi.timer === timer || return
+                        multi.timer = nothing
+                        finish!(multi)
+                    end
                 end
             end
         end
@@ -141,11 +154,13 @@ function timer_callback(
         @assert multi_h == multi.handle
         stoptimer!(multi)
         if timeout_ms >= 0
-            multi.timer = Timer(timeout_ms/1000) do timer
-                lock(multi.lock) do
-                    multi.timer === timer || return
-                    multi.timer = nothing
-                    do_multi(multi)
+            multi.timer = owned(multi.owner) do
+                Timer(timeout_ms/1000) do timer
+                    lock(multi.lock) do
+                        multi.timer === timer || return
+                        multi.timer = nothing
+                        do_multi(multi)
+                    end
                 end
             end
         elseif timeout_ms != -1
@@ -184,21 +199,24 @@ function socket_callback(
             preserve_handle(watcher)
             watcher_p = pointer_from_objref(watcher)
             @check curl_multi_assign(multi.handle, sock, watcher_p)
-            task = @async while watcher.readable || watcher.writable # isopen(watcher)
-                events = try
-                    wait(watcher)
-                catch err
-                    err isa EOFError && return
-                    err isa Base.IOError || rethrow()
-                    FileWatching.FDEvent()
-                end
-                flags = CURL_CSELECT_IN  * isreadable(events) +
-                        CURL_CSELECT_OUT * iswritable(events) +
-                        CURL_CSELECT_ERR * (events.disconnect || events.timedout)
-                lock(multi.lock) do
-                    watcher.readable || watcher.writable || return # !isopen
-                    @check curl_multi_socket_action(multi.handle, sock, flags)
-                    check_multi_info(multi)
+            task = owned(multi.owner) do
+                @async while watcher.readable || watcher.writable # isopen(watcher)
+                    events = try
+                        wait(watcher)
+                    catch err
+                        err isa EOFError && return
+                        iscancellation(err) && return # the multi was torn down
+                        err isa Base.IOError || rethrow()
+                        FileWatching.FDEvent()
+                    end
+                    flags = CURL_CSELECT_IN  * isreadable(events) +
+                            CURL_CSELECT_OUT * iswritable(events) +
+                            CURL_CSELECT_ERR * (events.disconnect || events.timedout)
+                    lock(multi.lock) do
+                        watcher.readable || watcher.writable || return # !isopen
+                        @check curl_multi_socket_action(multi.handle, sock, flags)
+                        check_multi_info(multi)
+                    end
                 end
             end
             @isdefined(errormonitor) && errormonitor(task)
