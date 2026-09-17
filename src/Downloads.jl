@@ -225,6 +225,8 @@ which have been downloaded so far. Note that `total` starts out as zero and
 remains zero until the server gives an indication of the total size of the
 download (e.g. with a `Content-Length` header), which may never happen. So a
 well-behaved progress callback should handle a total size of zero gracefully.
+If the callback cannot keep up with the rate of updates, intermediate updates
+are skipped and the callback is next called with the most recent values.
 
 If the `verbose` option is set to true, `libcurl`, which is used to implement
 the download functionality will print debugging information to `stderr`. If the
@@ -448,6 +450,7 @@ function request(
                     @sync begin
                         @async for buf in easy.output
                             write(output, buf)
+                            easy.paused && Curl.unpause(downloader′.multi, easy)
                         end
                         if progress !== nothing
                             @async for prog in easy.progress

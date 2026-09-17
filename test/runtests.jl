@@ -491,6 +491,46 @@ end
         end
     end
 
+    @testset "upload chunking" begin
+        # files are fed to libcurl in UPLOAD_CHUNK_SIZE pieces, the last one short
+        mktemp() do path, io
+            data = rand(UInt8, 2*Curl.UPLOAD_CHUNK_SIZE + 12345)
+            write(io, data)
+            close(io)
+            chunks = open(path) do file
+                [copy(Curl.read_chunk(file)) for _ = 1:3]
+            end
+            @test length.(chunks) == [Curl.UPLOAD_CHUNK_SIZE, Curl.UPLOAD_CHUNK_SIZE, 12345]
+            @test vcat(chunks...) == data
+        end
+    end
+
+    @testset "slow output backpressure" begin
+        # a queue of two chunks and a sink slower than the source force the
+        # transfer to be paused and resumed repeatedly
+        saved = Curl.OUTPUT_QUEUE_SIZE[]
+        Curl.OUTPUT_QUEUE_SIZE[] = 2
+        try
+            url = "$server/bytes/102400?seed=7"
+            expected = download_body(url)
+            sink = SlowIO()
+            resp = request(url; output = sink)
+            @test resp.status == 200
+            @test String(take!(sink.io)) == expected
+            # file:// transfers cannot be paused, so their output is not bounded
+            mktemp() do path, io
+                data = rand(UInt8, 1 << 20)
+                write(io, data)
+                close(io)
+                sink = SlowIO()
+                download("file://$path", sink)
+                @test take!(sink.io) == data
+            end
+        finally
+            Curl.OUTPUT_QUEUE_SIZE[] = saved
+        end
+    end
+
     @testset "errors" begin
         @test_throws ArgumentError download("ba\0d")
         @test_throws ArgumentError download("good", "ba\0d")

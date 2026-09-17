@@ -88,6 +88,22 @@ function remove_handle(multi::Multi, easy::Easy)
     connect_semaphore_release(easy)
 end
 
+# resume a transfer that write_callback paused because its output queue was
+# full; called by the task draining that queue once there is room again
+function unpause(multi::Multi, easy::Easy)
+    # wait until the queue is half drained so that a slow output doesn't cost
+    # a pause/unpause cycle per chunk
+    Base.n_avail(easy.output) <= easy.output.sz_max ÷ 2 || return
+    lock(multi.lock) do
+        easy.paused || return
+        easy.paused = false
+        # the handle may already have been removed by an interrupt or error
+        easy in multi.easies || return
+        @check curl_easy_pause(easy.handle, CURLPAUSE_CONT)
+    end
+    nothing
+end
+
 # multi-socket options
 
 function set_defaults(multi::Multi)

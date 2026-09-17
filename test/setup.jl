@@ -52,6 +52,16 @@ function test_response_string(response::AbstractString, status::Integer)
     @test parse(Int, m.captures[1]) == status
 end
 
+# an output that takes a while to write each chunk
+struct SlowIO <: IO
+    io::IOBuffer
+end
+SlowIO() = SlowIO(IOBuffer())
+function Base.unsafe_write(s::SlowIO, p::Ptr{UInt8}, n::UInt)
+    sleep(0.005)
+    return unsafe_write(s.io, p, n)
+end
+
 macro exception(ex)
     quote
         try $(esc(ex))
