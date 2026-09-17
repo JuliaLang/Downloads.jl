@@ -11,9 +11,21 @@ mutable struct Easy
     errbuf   :: Vector{UInt8}
     debug    :: Union{Function,Nothing}
     consem   :: Bool
+    paused   :: Bool
 end
 
 const EMPTY_BYTE_VECTOR = UInt8[]
+
+# Bound on the number of received chunks (16KB each with libcurl's default
+# buffer size) queued between the write callback and the task writing them to
+# the output. When the queue is full the transfer is paused so a slow output
+# doesn't make the whole body pile up in memory.
+const OUTPUT_QUEUE_SIZE = Ref(1024)
+
+# Size of the pieces a file is read in when uploading. Every piece handed to
+# libcurl costs a pause/unpause cycle, which makes libcurl drop and re-register
+# its socket (a new FDWatcher and task each time), so pieces should be large.
+const UPLOAD_CHUNK_SIZE = 1 << 20
 
 function Easy()
     easy = Easy(
@@ -21,13 +33,14 @@ function Easy()
         EMPTY_BYTE_VECTOR,
         Threads.Event(),
         nothing,
-        Channel{Vector{UInt8}}(Inf),
-        Channel{NTuple{4,Int}}(Inf),
+        Channel{Vector{UInt8}}(OUTPUT_QUEUE_SIZE[]),
+        Channel{NTuple{4,Int}}(1),
         C_NULL,
         String[],
         typemax(CURLcode),
         zeros(UInt8, CURL_ERROR_SIZE),
         nothing,
+        false,
         false,
     )
     finalizer(done!, easy)
@@ -81,6 +94,10 @@ function set_defaults(easy::Easy)
     setopt(easy, CURLOPT_NETRC, CURL_NETRC_OPTIONAL)
     setopt(easy, CURLOPT_COOKIEFILE, "")
     setopt(easy, CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT)
+    # when several requests to the same host start together, wait for the
+    # first connection to report whether it can multiplex (HTTP/2) instead of
+    # opening a new connection per request
+    setopt(easy, CURLOPT_PIPEWAIT, true)
 
     # prevent downloads that hang forever:
     # - timeout no response on connect (more than 30s)
@@ -108,6 +125,9 @@ function set_url(easy::Easy, url::Union{String, SubString{String}})
     setopt(easy, CURLOPT_URL, url)
     set_ssl_verify(easy, verify_host(url, "ssl"))
     set_ssh_verify(easy, verify_host(url, "ssh"))
+    # libcurl cannot pause file:// transfers (they are done in one go without
+    # the network layer), so their output queue cannot be bounded
+    startswith(url, r"file:"i) && (easy.output = Channel{Vector{UInt8}}(Inf))
 end
 set_url(easy::Easy, url::AbstractString) = set_url(easy, String(url))
 
@@ -366,10 +386,19 @@ function header_callback(
     end
 end
 
+# `readavailable` on an IOStream returns at most its 32KB buffer, which for a
+# file means a pause/unpause cycle per 32KB; read big pieces instead.
+read_chunk(input::IO) = readavailable(input)
+function read_chunk(input::IOStream)
+    buf = Vector{UInt8}(undef, UPLOAD_CHUNK_SIZE)
+    n = readbytes!(input, buf, UPLOAD_CHUNK_SIZE, all=false)
+    return resize!(buf, n)
+end
+
 # feed data to read_callback
 function upload_data(easy::Easy, input::IO)
     while true
-        data = eof(input) ? nothing : readavailable(input)
+        data = eof(input) ? nothing : read_chunk(input)
         easy.input === nothing && break
         easy.input = data
         curl_easy_pause(easy.handle, Curl.CURLPAUSE_CONT)
@@ -443,6 +472,14 @@ function write_callback(
     try
         easy = unsafe_pointer_to_objref(easy_p)::Easy
         n = size * count
+        # the check and the flag update share the channel lock so that the
+        # consumer, which reads the flag after each `take!`, cannot drain the
+        # queue between them and then wait forever on a paused transfer
+        paused = lock(easy.output) do
+            easy.paused = Base.n_avail(easy.output) >= easy.output.sz_max
+        end
+        # libcurl keeps the data and delivers it again once unpaused
+        paused && return CURL_WRITEFUNC_PAUSE
         buf = Array{UInt8}(undef, n)
         ccall(:memcpy, Ptr{Cvoid}, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), buf, data, n)
         put!(easy.output, buf)
@@ -462,7 +499,13 @@ function progress_callback(
 )::Cint
     try
         easy = unsafe_pointer_to_objref(easy_p)::Easy
-        put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
+        # libcurl reports progress on every socket read; only the most recent
+        # report is kept so that a slow progress callback sees current numbers
+        # instead of working through a backlog of stale ones
+        lock(easy.progress) do
+            isready(easy.progress) && take!(easy.progress)
+            put!(easy.progress, (dl_total, dl_now, ul_total, ul_now))
+        end
         return 0
     catch err
         @async @error("progress_callback: unexpected error", err=err, maxlog=1_000)
