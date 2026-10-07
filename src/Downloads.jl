@@ -393,99 +393,129 @@ function request(
     arg_read(input) do input
         arg_write(output) do output
             with_handle(Easy()) do easy
-                # setup the request
-                set_url(easy, url)
-                set_timeout(easy, timeout)
-                set_verbose(easy, verbose)
-                set_debug(easy, debug)
-                add_headers(easy, headers)
-
-                # libcurl does not set the default header reliably so set it
-                # explicitly unless user has specified it, xref
-                # https://github.com/JuliaLang/Pkg.jl/pull/2357
-                if !any(kv -> lowercase(kv[1]) == "user-agent", headers)
-                    Curl.add_header(easy, "User-Agent", Curl.USER_AGENT)
-                end
-
-                if have_input
-                    enable_upload(easy)
-                    if input_size !== nothing
-                        set_upload_size(easy, input_size)
-                    end
-                    if applicable(seek, input, 0)
-                        set_seeker(easy) do offset
-                            seek(input, Int(offset))
-                        end
-                    end
-                else
-                    set_body(easy, have_output && method != "HEAD")
-                end
-                method !== nothing && set_method(easy, method)
-                progress !== nothing && enable_progress(easy)
-                set_ca_roots(downloader′, easy)
-                info = (url = url, method = method, headers = headers)
-                easy_hook(downloader′, easy, info)
-
-                # do the request
-                add_handle(downloader′.multi, easy)
-                interrupted = Threads.Atomic{Bool}(false)
-                if interrupt !== nothing
-                    interrupt_task = @async begin
-                        # wait for the interrupt event
-                        wait(interrupt)
-                        # cancel the request
-                        remove_handle(downloader′.multi, easy)
-                        close(easy.output)
-                        close(easy.progress)
-                        Threads.atomic_xchg!(interrupted, true)
-                        close(input)
-                        notify(easy.ready)
-                    end
-                else
-                    interrupt_task = nothing
-                end
-                try # ensure handle is removed
-                    @sync begin
-                        @async for buf in easy.output
-                            write(output, buf)
-                        end
-                        if progress !== nothing
-                            @async for prog in easy.progress
-                                progress(prog...)
-                            end
-                        end
-                        if have_input
-                            @async upload_data(easy, input)
-                        end
-                    end
-                finally
-                    if !(interrupted[])
-                        if interrupt_task !== nothing
-                            # trigger interrupt
-                            notify(interrupt)
-                            wait(interrupt_task)
-                        else
-                            remove_handle(downloader′.multi, easy)
-                        end
-                    end
-                end
-
-                # return the response or throw an error
-                response[] = Response(get_response_info(easy)...)
-                easy.code == Curl.CURLE_OK && return
-                message = get_curl_errstr(easy)
-                if easy.code == typemax(Curl.CURLcode)
-                    # uninitialized code, likely a protocol error
-                    code = Int(0)
-                else
-                    code = Int(easy.code)
-                end
-                response[] = RequestError(url, code, message, response[])
-                throw && Base.throw(response[])
+                perform_request!(
+                    response, easy, url, input, output, method, headers, timeout,
+                    progress, verbose, debug, throw, downloader′, interrupt,
+                    have_input, have_output, input_size,
+                )
             end
         end
     end
     return response[]
+end
+
+# The request itself. The streams and callbacks are not specialized on, so this is
+# compiled once rather than for every combination of them that callers pass.
+function perform_request!(
+    response    :: Ref{Union{Response, RequestError}},
+    easy        :: Easy,
+    url         :: AbstractString,
+    input       :: IO,
+    output      :: IO,
+    method      :: Union{AbstractString, Nothing},
+    headers     :: Union{AbstractVector, AbstractDict},
+    timeout     :: Real,
+    progress    :: Union{Function, Nothing},
+    verbose     :: Bool,
+    debug       :: Union{Function, Nothing},
+    throw       :: Bool,
+    downloader  :: Downloader,
+    interrupt   :: Union{Nothing, Base.Event},
+    have_input  :: Bool,
+    have_output :: Bool,
+    input_size  :: Union{Integer, Nothing},
+)
+    @nospecialize input output progress debug interrupt
+    # setup the request
+    set_url(easy, url)
+    set_timeout(easy, timeout)
+    set_verbose(easy, verbose)
+    set_debug(easy, debug)
+    add_headers(easy, headers)
+
+    # libcurl does not set the default header reliably so set it
+    # explicitly unless user has specified it, xref
+    # https://github.com/JuliaLang/Pkg.jl/pull/2357
+    if !any(kv -> lowercase(kv[1]) == "user-agent", headers)
+        Curl.add_header(easy, "User-Agent", Curl.USER_AGENT)
+    end
+
+    if have_input
+        enable_upload(easy)
+        if input_size !== nothing
+            set_upload_size(easy, input_size)
+        end
+        if applicable(seek, input, 0)
+            set_seeker(easy) do offset
+                seek(input, Int(offset))
+            end
+        end
+    else
+        set_body(easy, have_output && method != "HEAD")
+    end
+    method !== nothing && set_method(easy, method)
+    progress !== nothing && enable_progress(easy)
+    set_ca_roots(downloader, easy)
+    info = (url = url, method = method, headers = headers)
+    easy_hook(downloader, easy, info)
+
+    # do the request
+    add_handle(downloader.multi, easy)
+    interrupted = Threads.Atomic{Bool}(false)
+    if interrupt !== nothing
+        interrupt_task = @async begin
+            # wait for the interrupt event
+            wait(interrupt)
+            # cancel the request
+            remove_handle(downloader.multi, easy)
+            close(easy.output)
+            close(easy.progress)
+            Threads.atomic_xchg!(interrupted, true)
+            close(input)
+            notify(easy.ready)
+        end
+    else
+        interrupt_task = nothing
+    end
+    try # ensure handle is removed
+        @sync begin
+            @async for buf in easy.output
+                write(output, buf)
+            end
+            if progress !== nothing
+                @async for prog in easy.progress
+                    progress(prog...)
+                end
+            end
+            if have_input
+                @async upload_data(easy, input)
+            end
+        end
+    finally
+        if !(interrupted[])
+            if interrupt_task !== nothing
+                # trigger interrupt
+                notify(interrupt)
+                wait(interrupt_task)
+            else
+                remove_handle(downloader.multi, easy)
+            end
+        end
+    end
+
+    # return the response or throw an error
+    response[] = Response(get_response_info(easy)...)
+    easy.code == Curl.CURLE_OK && return nothing
+    message = get_curl_errstr(easy)
+    if easy.code == typemax(Curl.CURLcode)
+        # uninitialized code, likely a protocol error
+        code = Int(0)
+    else
+        code = Int(easy.code)
+    end
+    response[] = RequestError(url, code, message, response[])
+    throw && Base.throw(response[])
+    return nothing
 end
 
 ## helper functions ##
