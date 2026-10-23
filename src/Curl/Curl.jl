@@ -71,8 +71,57 @@ if CURL_VERSION_INFO.ssl_version == Base.C_NULL
 else
     const SSL_VERSION = unsafe_string(CURL_VERSION_INFO.ssl_version)::String
 end
+
+# `curl_version_info_data` through `feature_names` (CURLVERSION_ELEVENTH, curl
+# 7.87); the LibCURL.jl binding only covers the fields up to `brotli_version`
+struct curl_version_info_data_11
+    age::CURLversion
+    version::Ptr{UInt8}
+    version_num::Cuint
+    host::Ptr{UInt8}
+    features::Cint
+    ssl_version::Ptr{UInt8}
+    ssl_version_num::Clong
+    libz_version::Ptr{UInt8}
+    protocols::Ptr{Ptr{UInt8}}
+    ares::Ptr{UInt8}
+    ares_num::Cint
+    libidn::Ptr{UInt8}
+    iconv_ver_num::Cint
+    libssh_version::Ptr{UInt8}
+    brotli_ver_num::Cuint
+    brotli_version::Ptr{UInt8}
+    nghttp2_ver_num::Cuint
+    nghttp2_version::Ptr{UInt8}
+    quic_version::Ptr{UInt8}
+    cainfo::Ptr{UInt8}
+    capath::Ptr{UInt8}
+    zstd_ver_num::Cuint
+    zstd_version::Ptr{UInt8}
+    hyper_version::Ptr{UInt8}
+    gsasl_version::Ptr{UInt8}
+    feature_names::Ptr{Ptr{UInt8}}
+end
+
+const CURL_FEATURE_NAMES = let names = String[]
+    if CURL_VERSION_INFO.age >= 10 # CURLVERSION_ELEVENTH
+        info = unsafe_load(Ptr{curl_version_info_data_11}(curl_version_info(CURLVERSION_NOW)))
+        if info.feature_names != C_NULL
+            i = 1
+            while (name = unsafe_load(info.feature_names, i)) != C_NULL
+                push!(names, unsafe_string(name))
+                i += 1
+            end
+        end
+    end
+    names
+end
+
+# With Apple SecTrust support, curl verifies against the system trust store
+# as long as no CA file or path is set
 const SYSTEM_SSL =
-    Sys.isapple() && startswith(SSL_VERSION, "SecureTransport") ||
+    Sys.isapple() && (startswith(SSL_VERSION, "SecureTransport") ||
+                      "AppleSecTrust" in CURL_FEATURE_NAMES) ||
     Sys.iswindows() && startswith(SSL_VERSION, "Schannel")
 
 const CURL_VERSION_STR = unsafe_string(curl_version())
