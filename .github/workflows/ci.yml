@@ -25,21 +25,21 @@ jobs:
           - macos-latest # Apple Silicon
           - macos-26-intel # Intel
           - windows-latest
-        arch:
-          - x64
-          - x86
+        word-size:
+          - 32
+          - 64
         # 32-bit Julia binaries are not available on macOS
         exclude:
           - os: macos-latest # Apple Silicon
-            arch: x86
+            word-size: 32
           - os: macos-26-intel # Intel
-            arch: x86
+            word-size: 32
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ (matrix.word-size == 32) && 'x86' || runner.arch }}
       - uses: julia-actions/cache@v1
       - run: julia --color=yes .ci/test_and_change_uuid.jl
       - uses: julia-actions/julia-buildpkg@v1
