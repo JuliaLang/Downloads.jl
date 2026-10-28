@@ -23,14 +23,17 @@ jobs:
           - 'nightly'
         os:
           - ubuntu-latest
-          - macos-latest
+          - macos-latest # Apple Silicon
+          - macos-26-intel # Intel
           - windows-latest
         arch:
           - x64
           - x86
         # 32-bit Julia binaries are not available on macOS
         exclude:
-          - os: macOS-latest
+          - os: macos-latest # Apple Silicon
+            arch: x86
+          - os: macos-26-intel # Intel
             arch: x86
     steps:
       - uses: actions/checkout@v4
