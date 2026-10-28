@@ -352,13 +352,21 @@ include("setup.jl")
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
-        @test err.response.proto === nothing
+        if Curl.CURL_VERSION < v"8.10"
+            @test err.response.proto === nothing
+        else
+            @test err.response.proto == "https"
+        end
 
         err = @exception request("https://domain.invalid", input = IOBuffer("Hi"))
         @test err isa RequestError
         @test err.code != 0
         @test startswith(err.message, "Could not resolve host")
-        @test err.response.proto === nothing
+        if Curl.CURL_VERSION < v"8.10"
+            @test err.response.proto === nothing
+        else
+            @test err.response.proto == "https"
+        end
 
         err = @exception download("$server/status/404")
         @test err isa RequestError
@@ -592,12 +600,12 @@ include("setup.jl")
     end
 
     @__MODULE__() == Main && @testset "ftp download" begin
-        url = "ftp://xmlsoft.org/libxslt/libxslt-1.1.33.tar.gz"
+        url = "ftp://ftp.gnu.org/gnu/auctex/auctex-13.3.tar.gz"
         file = Downloads.download(url)
         @test isfile(file)
-        @test filesize(file) == 3444093
+        @test filesize(file) == 1695608
         head = String(read!(open(file), Vector{UInt8}(undef, 16)))
-        @test head == "\x1f\x8b\b\0\xa5T.\\\x02\x03\xec]{s۶"
+        @test head == "\x1f\x8b\b\0\0\0\0\0\x02\x03\xec[\xebr\xdb\xc6"
     end
 
     @testset "grace cleanup" begin
