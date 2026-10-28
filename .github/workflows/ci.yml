@@ -28,12 +28,16 @@ jobs:
         word-size:
           - 32
           - 64
-        # 32-bit Julia binaries are not available on macOS
         exclude:
-          - os: macos-latest # Apple Silicon
+          # 32-bit builds of Julia are not available on Apple Silicon macOS
+          - os: macos-latest
             word-size: 32
-          - os: macos-26-intel # Intel
+          # 32-bit builds of Julia are not available on Intel macOS
+          - os: macos-26-intel
             word-size: 32
+          # Julia 1.6 does not have native builds for Apple Silicon macOS
+          - os: macos-latest
+            version: '1.6'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
