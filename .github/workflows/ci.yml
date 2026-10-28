@@ -9,6 +9,8 @@ on:
       - master
       - release-*
     tags: '*'
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ${{ matrix.os }}
