@@ -4,13 +4,18 @@ include("setup.jl")
     @testset "libcurl configuration" begin
         julia = "$(VERSION.major).$(VERSION.minor)"
         @test Curl.USER_AGENT == "curl/$(Curl.CURL_VERSION) julia/$julia"
-        if Curl.CURL_VERSION < v"8.15"
-            @test Curl.SYSTEM_SSL == Sys.iswindows() | Sys.isapple()
+        if Sys.iswindows()
+            @test Curl.SYSTEM_SSL
+        elseif Sys.isapple()
+            if Curl.CURL_VERSION < v"8.15"
+                @test Curl.SYSTEM_SSL
+            else
+                # Starting with curl 8.15 we use OpenSSL on Apple platforms, which
+                # uses the system trust store when built with Apple SecTrust
+                @test Curl.SYSTEM_SSL == ("AppleSecTrust" in Curl.CURL_FEATURE_NAMES)
+            end
         else
-            # Starting with curl 8.15 we use OpenSSL on Apple platforms, which
-            # uses the system trust store when built with Apple SecTrust
-            apple_sectrust = "AppleSecTrust" in Curl.CURL_FEATURE_NAMES
-            @test Curl.SYSTEM_SSL == Sys.iswindows() | (Sys.isapple() & apple_sectrust)
+            @test !Curl.SYSTEM_SSL
         end
         if Curl.SYSTEM_SSL && !haskey(ENV, "JULIA_SSL_CA_ROOTS_PATH") &&
                 !haskey(ENV, "SSL_CERT_DIR") && !haskey(ENV, "SSL_CERT_FILE")
