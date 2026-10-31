@@ -10,11 +10,16 @@ include("setup.jl")
             if Curl.CURL_VERSION < v"8.15"
                 @test Curl.SYSTEM_SSL
             else
-                # Starting with curl 8.15 we use OpenSSL on Apple platforms
-                @test !Curl.SYSTEM_SSL
+                # Starting with curl 8.15 we use OpenSSL on Apple platforms, which
+                # uses the system trust store when built with Apple SecTrust
+                @test Curl.SYSTEM_SSL == ("AppleSecTrust" in Curl.CURL_FEATURE_NAMES)
             end
         else
             @test !Curl.SYSTEM_SSL
+        end
+        if Curl.SYSTEM_SSL && !haskey(ENV, "JULIA_SSL_CA_ROOTS_PATH") &&
+                !haskey(ENV, "SSL_CERT_DIR") && !haskey(ENV, "SSL_CERT_FILE")
+            @test Downloads.Downloader().ca_roots === nothing
         end
     end
 
