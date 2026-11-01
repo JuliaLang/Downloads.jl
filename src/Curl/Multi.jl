@@ -25,8 +25,18 @@ function done!(multi::Multi)
     stoptimer!(multi)
     handle = multi.handle
     handle == C_NULL && return
-    multi.handle = C_NULL
-    curl_multi_cleanup(handle)
+    # Starting from LibCURL v8.10 we have to keep the handle non-NULL before calling the
+    # cleanup function (<https://github.com/JuliaLang/Downloads.jl/issues/260>), but doing
+    # so with Curl v8.10 causes an assertion failure
+    # (<https://github.com/JuliaLang/Downloads.jl/issues/260#issuecomment-2452772273>),
+    # that's fixed only with curl 8.11.
+    @static if CURL_VERSION < v"8.11"
+        multi.handle = C_NULL
+        curl_multi_cleanup(handle)
+    else
+        curl_multi_cleanup(handle)
+        multi.handle = C_NULL
+    end
     nothing
 end
 
