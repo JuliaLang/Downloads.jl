@@ -11,35 +11,39 @@ on:
     tags: '*'
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.3'
           - '1.6'
+          - '1.10'
           - '1' # automatically expands to the latest stable 1.x release of Julia.
           - 'nightly'
         os:
           - ubuntu-latest
-          - macos-latest
+          - macos-latest # Apple Silicon
+          - macos-26-intel # Intel
           - windows-latest
-        arch:
-          - x64
-          - x86
-        # 32-bit Julia binaries are not available on macOS
+        word-size:
+          - 32
+          - 64
         exclude:
-          - os: macOS-latest
-            arch: x86
-          - os: windows-latest
-            version: '1.3' # `curl_easy_setopt: 48` error on github CI
+          # 32-bit builds of Julia are not available on Apple Silicon macOS
+          - os: macos-latest
+            word-size: 32
+          # 32-bit builds of Julia are not available on Intel macOS
+          - os: macos-26-intel
+            word-size: 32
+          # Julia 1.6 does not have native builds for Apple Silicon macOS
+          - os: macos-latest
+            version: '1.6'
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ (matrix.word-size == 32) && 'x86' || runner.arch }}
       - uses: julia-actions/cache@v1
       - run: julia --color=yes .ci/test_and_change_uuid.jl
       - uses: julia-actions/julia-buildpkg@v1
