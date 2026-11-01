@@ -9,6 +9,8 @@ on:
       - master
       - release-*
     tags: '*'
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -39,16 +41,19 @@ jobs:
           - os: macos-latest
             version: '1.6'
     steps:
-      - uses: actions/checkout@v4
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
           arch: ${{ (matrix.word-size == 32) && 'x86' || runner.arch }}
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v3
       - run: julia --color=yes .ci/test_and_change_uuid.jl
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v7
         with:
           file: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
