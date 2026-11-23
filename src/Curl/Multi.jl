@@ -183,25 +183,30 @@ function socket_callback(
             watcher = FDWatcher(OS_HANDLE(sock), readable, writable)
             preserve_handle(watcher)
             watcher_p = pointer_from_objref(watcher)
-            @check curl_multi_assign(multi.handle, sock, watcher_p)
-            task = @async while watcher.readable || watcher.writable # isopen(watcher)
-                events = try
-                    wait(watcher)
-                catch err
-                    err isa EOFError && return
-                    err isa Base.IOError || rethrow()
-                    FileWatching.FDEvent()
+            if !iszero(@check curl_multi_assign(multi.handle, sock, watcher_p))
+                # curl will never pass this watcher back, so close it now (#313)
+                unpreserve_handle(watcher)
+                close(watcher)
+            else
+                task = @async while watcher.readable || watcher.writable # isopen(watcher)
+                    events = try
+                        wait(watcher)
+                    catch err
+                        err isa EOFError && return
+                        err isa Base.IOError || rethrow()
+                        FileWatching.FDEvent()
+                    end
+                    flags = CURL_CSELECT_IN  * isreadable(events) +
+                            CURL_CSELECT_OUT * iswritable(events) +
+                            CURL_CSELECT_ERR * (events.disconnect || events.timedout)
+                    lock(multi.lock) do
+                        watcher.readable || watcher.writable || return # !isopen
+                        @check curl_multi_socket_action(multi.handle, sock, flags)
+                        check_multi_info(multi)
+                    end
                 end
-                flags = CURL_CSELECT_IN  * isreadable(events) +
-                        CURL_CSELECT_OUT * iswritable(events) +
-                        CURL_CSELECT_ERR * (events.disconnect || events.timedout)
-                lock(multi.lock) do
-                    watcher.readable || watcher.writable || return # !isopen
-                    @check curl_multi_socket_action(multi.handle, sock, flags)
-                    check_multi_info(multi)
-                end
+                @isdefined(errormonitor) && errormonitor(task)
             end
-            @isdefined(errormonitor) && errormonitor(task)
         else
             lock(multi.lock) do
                 check_multi_info(multi)
